@@ -1,0 +1,6 @@
+{
+  "name": "Longevity Priority Navigator",
+  "description": "An AI navigator that analyzes aging research to pinpoint, prioritize, and justify high-impact research directions, creating an interactive knowledge graph to accelerate the science of longevity.",
+  "requestFramePermissions": [],
+  "prompt": ""
+}
