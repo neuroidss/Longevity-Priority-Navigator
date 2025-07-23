@@ -1,6 +1,8 @@
 
 
 
+
+
 import { GoogleGenAI, Type } from "@google/genai";
 import { 
     type AgentResponse, type GroundingSource, 
@@ -8,7 +10,7 @@ import {
 } from '../types';
 import { buildAgentPrompts, buildChatPrompt } from './agentPrompts';
 
-// --- Parser functions moved from agentParser.ts ---
+// --- Parser functions ---
 
 const parseJsonFromText = (text: string, addLog: (msg: string) => void): string => {
     let cleanedText = text;
@@ -37,18 +39,6 @@ const parseAgentResponse = (jsonText: string, agentType: AgentType, addLog: (msg
         const response: AgentResponse = {};
 
         if (data.keyQuestion) response.keyQuestion = data.keyQuestion;
-        if (data.articles) {
-            response.items = data.articles.map((a: any) => {
-                const type = (a.details as string)?.toLowerCase().includes('inventor') ? 'patent' : 'article';
-                return {
-                    id: `item-${a.title.slice(0, 20).replace(/\s+/g, '-')}-${Math.random()}`, 
-                    type, 
-                    title: a.title, 
-                    summary: a.summary, 
-                    details: a.details || ''
-                }
-            });
-        }
         if (data.knowledgeGraph) response.knowledgeGraph = data.knowledgeGraph;
         if (data.synthesis) response.synthesis = data.synthesis;
         if (data.researchOpportunities) {
@@ -66,12 +56,31 @@ const parseAgentResponse = (jsonText: string, agentType: AgentType, addLog: (msg
         if (data.trendAnalysis) {
             response.trendAnalysis = data.trendAnalysis;
         }
+        if (data.contradictions) {
+            response.contradictions = data.contradictions.map((c: any, index: number) => ({
+                id: `con-${index}-${Math.random()}`,
+                statement: c.statement,
+            }));
+        }
+        if (data.synergies) {
+            response.synergies = data.synergies.map((s: any, index: number) => ({
+                id: `syn-${index}-${Math.random()}`,
+                statement: s.statement,
+            }));
+        }
+        if (data.sources) {
+            response.sources = data.sources.map((s: any) => ({
+                uri: s.uri,
+                title: s.title || s.uri,
+            }));
+        }
         
         return response;
 
     } catch (error) {
         addLog(`[Parser] ERROR: Error parsing response for ${agentType}: ${error}\nRaw text: ${jsonText}`);
-        return { items: [{ id: 'fallback-item', type: 'article', title: 'Raw Response', summary: jsonText, details: 'Could not parse structured data.' }] };
+        const fallbackSummary = `Could not parse the AI's structured response. The raw text received was: ${jsonText}`;
+        return { synthesis: fallbackSummary };
     }
 };
 
@@ -90,7 +99,7 @@ export const dispatchAgent = async (
     addLog(`[dispatchAgent] Starting... Agent: ${agentType}, Model: ${model.name}, Query: "${query}"`);
 
     try {
-        let uniqueSources: GroundingSource[] = [];
+        let sourcesFromGrounding: GroundingSource[] = [];
         let { systemInstruction, userPrompt } = buildAgentPrompts(query, agentType, lens);
 
         addLog(`[GoogleAI] Using Google AI model '${model.id}'...`);
@@ -142,13 +151,27 @@ export const dispatchAgent = async (
                     uri: web.uri,
                     title: web.title || web.uri,
                 }));
-            uniqueSources.push(...webSources);
+            sourcesFromGrounding.push(...webSources);
             addLog(`[GoogleAI] Extracted ${webSources.length} web sources from grounding metadata.`);
         }
 
         const finalAgentResponse = parseAgentResponse(jsonText, agentType, addLog);
+        
+        // Merge sources from agent response and grounding metadata, then de-duplicate
+        const sourcesFromAgent = finalAgentResponse.sources || [];
+        const combinedSources = [...sourcesFromAgent, ...sourcesFromGrounding];
+        
+        const seenUris = new Set<string>();
+        const uniqueSources = combinedSources.filter(source => {
+            if (source.uri && !seenUris.has(source.uri)) {
+                seenUris.add(source.uri);
+                return true;
+            }
+            return false;
+        });
+
         finalAgentResponse.sources = uniqueSources;
-        addLog(`[dispatchAgent] Finished successfully. Returning ${finalAgentResponse.items?.length || 0} items.`);
+        addLog(`[dispatchAgent] Finished successfully with ${uniqueSources.length} unique sources.`);
         return finalAgentResponse;
 
     } catch (e) {

@@ -13,15 +13,6 @@ export enum AgentType {
 
 export type AnalysisLens = 'Balanced' | 'High-Risk/High-Reward' | 'Clinical Translation' | 'Biomarker Discovery' | 'Fundamental Mechanisms';
 
-export interface WorkspaceItem {
-  id: string;
-  type: 'article' | 'patent';
-  title: string;
-  summary: string;
-  details: string; 
-  sourceUri?: string;
-}
-
 export interface GroundingSource {
     uri: string;
     title: string;
@@ -30,7 +21,7 @@ export interface GroundingSource {
 export interface KnowledgeGraphNode {
     id: string;
     label: string;
-    type: 'Gene' | 'Protein' | 'Compound' | 'Pathway' | 'Disease' | 'Process' | 'Topic' | 'Hypothesis' | 'KnowledgeGap' | 'Method' | 'Result' | 'Observation';
+    type: 'Gene' | 'Protein' | 'Compound' | 'Pathway' | 'Disease' | 'Process' | 'Topic' | 'Hypothesis' | 'KnowledgeGap' | 'Method' | 'Result' | 'Observation' | 'Tool' | 'Biomarker';
     status?: 'normal' | 'dysregulated' | 'intervention_target';
     x?: number;
     y?: number;
@@ -59,6 +50,16 @@ export interface ResearchOpportunity {
     potentialImpact: string;
 }
 
+export interface Contradiction {
+    id: string;
+    statement: string;
+}
+
+export interface Synergy {
+    id: string;
+    statement: string;
+}
+
 export interface TrendShift {
   shiftTitle: string;
   fromFocus: string;
@@ -81,22 +82,24 @@ export interface TrendAnalysis {
 
 export interface WorkspaceState {
   topic: string;
-  items: WorkspaceItem[];
   sources: GroundingSource[];
   knowledgeGraph: KnowledgeGraph | null;
   synthesis: string | null;
   researchOpportunities: ResearchOpportunity[];
+  contradictions: Contradiction[];
+  synergies: Synergy[];
   keyQuestion: string | null;
   trendAnalysis: TrendAnalysis | null;
   timestamp: number;
 }
 
 export interface AgentResponse {
-  items?: WorkspaceItem[];
   sources?: GroundingSource[];
   knowledgeGraph?: KnowledgeGraph;
   synthesis?: string;
   researchOpportunities?: ResearchOpportunity[];
+  contradictions?: Contradiction[];
+  synergies?: Synergy[];
   keyQuestion?: string;
   trendAnalysis?: TrendAnalysis;
 }

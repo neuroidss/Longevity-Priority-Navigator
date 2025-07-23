@@ -1,5 +1,7 @@
 
 
+
+
 import React, { useState, useRef, useEffect } from 'react';
 import { ChatMessage, KnowledgeGraphNode } from '../types';
 import { LightbulbIcon, NetworkIcon } from './icons';
@@ -18,15 +20,27 @@ const generateContextualQuestions = (node: KnowledgeGraphNode): string[] => {
     return questions.slice(0, 3);
 };
 
+const formatMessage = (text: string) => {
+    let html = text.replace(/\n/g, '<br />');
+    html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    html = html.replace(/(?:^|\n)(?:\* |- )([^\n<]+)/g, '<ul><li style="margin-left: 20px; padding-left: 5px;">$1</li></ul>');
+    html = html.replace(/<\/ul><br \/><ul>/g, '');
+    return html;
+};
 
-const ChatView: React.FC<{ 
-    chatHistory: ChatMessage[],
-    isChatting: boolean,
-    onSendMessage: (message: string) => void,
-    isWorkspaceReady: boolean,
-    selectedNode: KnowledgeGraphNode | null,
-    onClearSelectedNode: () => void,
-}> = ({ chatHistory, isChatting, onSendMessage, isWorkspaceReady, selectedNode, onClearSelectedNode }) => {
+
+interface ChatViewProps {
+    chatHistory: ChatMessage[];
+    isChatting: boolean;
+    onSendMessage: (message: string) => void;
+    isWorkspaceReady: boolean;
+    selectedNode: KnowledgeGraphNode | null;
+    onClearSelectedNode: () => void;
+}
+
+const ChatView: React.FC<ChatViewProps> = ({ 
+    chatHistory, isChatting, onSendMessage, isWorkspaceReady, selectedNode, onClearSelectedNode 
+}) => {
     const [input, setInput] = useState('');
     const endOfMessagesRef = useRef<HTMLDivElement>(null);
 
@@ -50,14 +64,6 @@ const ChatView: React.FC<{
             e.preventDefault();
             handleSend();
         }
-    };
-    
-    const formatMessage = (text: string) => {
-        let html = text.replace(/\n/g, '<br />');
-        html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-        html = html.replace(/(\* |- )([^\n<]+)/g, '<ul><li style="margin-left: 20px;">$2</li></ul>');
-        html = html.replace(/<\/ul><br \/><ul>/g, ''); 
-        return html;
     };
 
     const DefaultChatInput = () => (
@@ -150,7 +156,7 @@ const ChatView: React.FC<{
                                     <div className="w-2 h-2 bg-slate-400 rounded-full animate-pulse delay-300"></div>
                                 </div>
                             ) : (
-                                <p className="text-sm leading-relaxed" dangerouslySetInnerHTML={{ __html: formatMessage(msg.text) }} />
+                                <div className="text-sm leading-relaxed" dangerouslySetInnerHTML={{ __html: formatMessage(msg.text) }} />
                             )}
                         </div>
                     </div>

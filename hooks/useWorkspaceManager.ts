@@ -1,4 +1,6 @@
 
+
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { type WorkspaceState, AgentType, type ChatMessage, type AgentResponse, type KnowledgeGraph, type KnowledgeGraphNode, type AnalysisLens } from '../types';
 import { dispatchAgent } from '../services/geminiService';
@@ -6,13 +8,9 @@ import { useAppSettings } from './useAppSettings';
 
 const FEATURED_ANALYSIS: WorkspaceState = {
     topic: "AI-driven longevity research prioritization",
-    items: [
-        { id: 'item-pres-1', type: 'article', title: 'Presentation: Will AI help us defeat aging?', summary: 'By Andrei Tarkhov. Discusses the core challenges in aging research, including the "chicken and egg" problem of weak interventions and noisy biomarkers, and reviews various approaches from in-vitro screening to FDA-approved drugs.', details: 'Source: Agentic AI x Longevity Hackathon, July 2025' },
-        { id: 'item-pres-2', type: 'article', title: 'Presentation: Using AI to accelerate longevity research', summary: 'By Danil Salimov. Outlines a 5-step AI system for creating a living knowledge graph to prioritize research, track trends, and generate actionable insights.', details: 'Source: Agentic AI x Longevity Hackathon, July 2025' }
-    ],
     sources: [
-        { uri: '#', title: 'Andrei Tarkhov, Applied AI, Retro Biosciences' },
-        { uri: '#', title: 'Danil Salimov, NTU "Sirius", Blastim Graduate' }
+        { uri: '#', title: 'Presentation: Will AI help us defeat aging? - Andrei Tarkhov, Applied AI, Retro Biosciences' },
+        { uri: '#', title: 'Presentation: Using AI to accelerate longevity research - Danil Salimov, NTU "Sirius", Blastim Graduate' }
     ],
     knowledgeGraph: {
         nodes: [
@@ -68,6 +66,12 @@ An AI-driven system can break this deadlock by creating a dynamic knowledge grap
             potentialImpact: 'Could provide the first clinically-validated, molecular biomarkers of a human anti-aging intervention.'
         }
     ],
+    contradictions: [
+        { id: 'con-1', statement: "High-throughput in-vitro screens often identify compounds with high toxicity or off-target effects (e.g., PAINS) that fail in subsequent in-vivo validation." },
+    ],
+    synergies: [
+        { id: 'syn-1', statement: "The observed all-cause mortality reduction from SGLT2 inhibitors (a clinical result) could be mechanistically linked to fundamental processes like cellular senescence, providing a bridge between clinical outcomes and basic science." }
+    ],
     keyQuestion: "How can we systematically distinguish genuine anti-aging effects from disease-specific treatments in human data?",
     trendAnalysis: null,
     timestamp: 0 // Will be updated on load
@@ -81,11 +85,12 @@ const createWorkspaceState = (
     if (!agentResponse) {
         return { 
             topic: currentTopic, 
-            items: [], 
             sources: [], 
             knowledgeGraph: null, 
             synthesis: null,
             researchOpportunities: [],
+            contradictions: [],
+            synergies: [],
             keyQuestion: null,
             trendAnalysis: null,
             timestamp: Date.now() 
@@ -96,11 +101,12 @@ const createWorkspaceState = (
 
     return {
         topic: currentTopic,
-        items: agentResponse.items || [],
         sources: agentResponse.sources || [],
         knowledgeGraph: newGraph,
         synthesis: agentResponse.synthesis || null,
         researchOpportunities: agentResponse.researchOpportunities || [],
+        contradictions: agentResponse.contradictions || [],
+        synergies: agentResponse.synergies || [],
         keyQuestion: agentResponse.keyQuestion || null,
         trendAnalysis: agentResponse.trendAnalysis || null,
         timestamp: Date.now()
@@ -157,7 +163,13 @@ export const useWorkspaceManager = ({ settings, addLog, storageKey }: WorkspaceM
         }
     }, [addLog, storageKey, settings.model]);
 
-    const handleDispatchAgent = useCallback(async (lens: AnalysisLens, agentType: AgentType, setChatHistory: React.Dispatch<React.SetStateAction<ChatMessage[]>>, setSelectedNode: React.Dispatch<React.SetStateAction<KnowledgeGraphNode | null>>) => {
+    const handleDispatchAgent = useCallback(async (
+        lens: AnalysisLens, 
+        agentType: AgentType, 
+        setActiveTab: React.Dispatch<React.SetStateAction<'priorities' | 'knowledge_web' | 'sources'>>,
+        setChatHistory: React.Dispatch<React.SetStateAction<ChatMessage[]>>, 
+        setSelectedNode: React.Dispatch<React.SetStateAction<KnowledgeGraphNode | null>>
+    ) => {
         if (!topic) {
             setError("Please enter a research topic first.");
             return;
@@ -179,11 +191,17 @@ export const useWorkspaceManager = ({ settings, addLog, storageKey }: WorkspaceM
             const response = await dispatchAgent(
                 topic, agentType, settings.model, addLog, settings.apiKey, setLoadingMessage, lens
             );
-            addLog(`Agent '${agentType}' finished. Found ${(response.items?.length || 0)} items.`);
+            addLog(`Agent '${agentType}' finished.`);
 
             const newWorkspace = createWorkspaceState(topic, response);
             setWorkspace(newWorkspace);
             setHasSearched(true);
+            
+            if (agentType === AgentType.TrendAnalyzer) {
+                setActiveTab('knowledge_web');
+            } else {
+                setActiveTab('priorities');
+            }
             
             const initialChatHistory: ChatMessage[] = [];
             setChatHistory(initialChatHistory);

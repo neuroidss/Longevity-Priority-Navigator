@@ -1,25 +1,110 @@
 
-
-import React, { useState, useMemo, useEffect } from 'react';
-import { type WorkspaceState, type WorkspaceItem, type KnowledgeGraphNode, type ResearchOpportunity, type AnalysisLens, type TrendAnalysis } from '../types';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { type WorkspaceState, type KnowledgeGraphNode, type ResearchOpportunity, type AnalysisLens, type TrendAnalysis, Contradiction, Synergy, GroundingSource } from '../types';
 import LoadingSpinner from './LoadingSpinner';
-import { LinkIcon, ArticleIcon, PatentIcon, NetworkIcon, LightbulbIcon, HypothesisIcon, BrainIcon, ClockIcon, ArrowTrendingUpIcon, ArrowTrendingDownIcon, BeakerIcon, ArrowsRightLeftIcon, BuildingLibraryIcon, ShieldCheckIcon, MethodIcon } from './icons';
+import { LinkIcon, NetworkIcon, LightbulbIcon, HypothesisIcon, BrainIcon, ClockIcon, ArrowTrendingUpIcon, ArrowTrendingDownIcon, BeakerIcon, ArrowsRightLeftIcon, BuildingLibraryIcon, ShieldCheckIcon, MethodIcon, SynergyIcon, ConflictIcon } from './icons';
 import KnowledgeGraphView from './KnowledgeGraphView';
+import AnalysisMeta from './AnalysisMeta';
 import { LENS_DEFINITIONS } from '../constants';
 
-interface WorkspaceViewProps {
-  workspace: WorkspaceState | null;
-  isLoading: boolean;
-  error: string | null;
-  hasSearched: boolean;
-  loadingMessage: string;
-  onNodeClick: (node: KnowledgeGraphNode) => void;
-  selectedNodeId: string | null;
-  activeTab: 'priorities' | 'knowledge_web' | 'sources';
-  setActiveTab: (tab: 'priorities' | 'knowledge_web' | 'sources') => void;
-}
+const Citation: React.FC<{ citationText: string; allSources: GroundingSource[] }> = ({ citationText, allSources }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const wrapperRef = useRef<HTMLSpanElement>(null);
 
-const TrendAnalysisCard: React.FC<{ analysis: TrendAnalysis }> = ({ analysis }) => {
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
+                setIsOpen(false);
+            }
+        };
+
+        if (isOpen) {
+            document.addEventListener('mousedown', handleClickOutside);
+        } else {
+            document.removeEventListener('mousedown', handleClickOutside);
+        }
+
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, [isOpen]);
+
+    const indices = citationText.match(/\d+/g)?.map(n => parseInt(n, 10)) || [];
+    const citationSources = indices.map(index => allSources[index - 1]).filter(Boolean);
+
+    if (citationSources.length === 0) {
+        return <span className="text-purple-300 font-bold">{citationText}</span>;
+    }
+
+    return (
+        <span ref={wrapperRef} className="relative inline-block">
+            <button
+                onClick={(e) => { e.stopPropagation(); setIsOpen(!isOpen); }}
+                className="text-purple-300 font-bold cursor-pointer hover:underline focus:outline-none focus:ring-2 focus:ring-purple-400/50 rounded-sm"
+                aria-haspopup="true"
+                aria-expanded={isOpen}
+            >
+                {citationText}
+            </button>
+            {isOpen && (
+                <div 
+                    className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 max-w-xs bg-slate-950 text-xs text-slate-200 border border-slate-600 rounded-lg p-2 z-20 shadow-lg"
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <button onClick={() => setIsOpen(false)} className="absolute top-1 right-1 p-1 text-slate-500 hover:text-white" aria-label="Close">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>
+                    {citationSources.map((source, idx) => (
+                        <a 
+                           key={idx} 
+                           href={source.uri} 
+                           target="_blank" 
+                           rel="noopener noreferrer" 
+                           className="flex items-start gap-2 text-left p-2 rounded hover:bg-slate-800 transition-colors"
+                        >
+                           <span className="font-bold text-purple-400 flex-shrink-0">[{indices[idx]}]</span>
+                           <span className="text-slate-300 whitespace-normal">{source.title}</span>
+                        </a>
+                    ))}
+                </div>
+            )}
+        </span>
+    );
+};
+
+
+const TextWithCitations: React.FC<{ text: string; sources: GroundingSource[]; className?: string; as?: 'p' | 'span' }> = ({ text, sources, className, as = 'p' }) => {
+    const Component = as;
+    const renderText = () => {
+        if (!text) return '';
+
+        // First, handle bolding
+        const boldedParts = text.split(/(\*\*.*?\*\*)/g).map((part, i) => {
+            if (part.startsWith('**') && part.endsWith('**')) {
+                return <strong key={i} className="font-bold text-slate-100">{part.slice(2, -2)}</strong>;
+            }
+            return part;
+        });
+
+        // Then, handle citations within each part
+        return boldedParts.map((part, i) => {
+            if (typeof part !== 'string') return part;
+
+            const citationParts = part.split(/(\[\s*\d+(?:\s*,\s*\d+)*\s*\])/g);
+            return citationParts.map((subPart, j) => {
+                if (/^\[\s*\d/.test(subPart)) {
+                    return <Citation key={`${i}-${j}`} citationText={subPart} allSources={sources} />;
+                }
+                return <React.Fragment key={`${i}-${j}`}>{subPart}</React.Fragment>;
+            });
+        });
+    };
+    
+    return <Component className={className}>{renderText()}</Component>;
+};
+
+
+const TrendAnalysisCard: React.FC<{ analysis: TrendAnalysis, sources: GroundingSource[] }> = ({ analysis, sources }) => {
     return (
         <div className="bg-gradient-to-br from-slate-900 to-slate-800 border border-slate-700 rounded-2xl p-6 shadow-2xl shadow-slate-800/20 space-y-8">
             {/* Header */}
@@ -28,11 +113,11 @@ const TrendAnalysisCard: React.FC<{ analysis: TrendAnalysis }> = ({ analysis }) 
                     <ClockIcon className="h-10 w-10 text-white" />
                 </div>
                 <h2 className="text-sm font-bold uppercase tracking-widest text-teal-400 mb-2">Evolution of Research Focus</h2>
-                <p className="text-xl font-medium text-slate-200 max-w-3xl">{analysis.summary}</p>
+                 <TextWithCitations text={analysis.summary} sources={sources} className="text-xl font-medium text-slate-200 max-w-3xl" />
             </div>
             
             {/* Key Shifts - This is the core redesign */}
-            {analysis.keyShifts?.length > 0 && (
+            {Array.isArray(analysis.keyShifts) && analysis.keyShifts.length > 0 && (
                 <div className="space-y-6">
                     <h3 className="text-xl font-bold text-slate-100 text-center">Key Shifts in Focus</h3>
                     <div className="space-y-5">
@@ -43,7 +128,7 @@ const TrendAnalysisCard: React.FC<{ analysis: TrendAnalysis }> = ({ analysis }) 
                                     {/* From */}
                                     <div className="flex-1 text-center bg-slate-900/40 p-4 rounded-lg border-l-4 border-red-500">
                                         <p className="text-sm font-semibold uppercase text-red-400 tracking-wider">Then</p>
-                                        <p className="text-slate-300 mt-2 font-medium">{shift.fromFocus}</p>
+                                        <TextWithCitations text={shift.fromFocus} sources={sources} className="text-slate-300 mt-2 font-medium" />
                                     </div>
                                     
                                     {/* Arrow */}
@@ -54,12 +139,12 @@ const TrendAnalysisCard: React.FC<{ analysis: TrendAnalysis }> = ({ analysis }) 
                                     {/* To */}
                                     <div className="flex-1 text-center bg-slate-900/40 p-4 rounded-lg border-r-4 border-green-500">
                                         <p className="text-sm font-semibold uppercase text-green-400 tracking-wider">Now</p>
-                                        <p className="text-slate-300 mt-2 font-medium">{shift.toFocus}</p>
+                                        <TextWithCitations text={shift.toFocus} sources={sources} className="text-slate-300 mt-2 font-medium" />
                                     </div>
                                 </div>
-                                <p className="text-xs text-slate-400 text-center mt-4 pt-4 border-t border-slate-700/50">
-                                    <span className="font-bold">Justification:</span> {shift.justification}
-                                </p>
+                                <div className="text-xs text-slate-400 text-center mt-4 pt-4 border-t border-slate-700/50">
+                                    <span className="font-bold">Justification:</span> <TextWithCitations text={shift.justification} sources={sources} as="span" />
+                                </div>
                             </div>
                         ))}
                     </div>
@@ -68,7 +153,7 @@ const TrendAnalysisCard: React.FC<{ analysis: TrendAnalysis }> = ({ analysis }) 
 
             {/* Additional Concepts */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6 border-t border-slate-700/50">
-                {analysis.fadingConcepts?.length > 0 && (
+                {Array.isArray(analysis.fadingConcepts) && analysis.fadingConcepts.length > 0 && (
                      <div className="bg-red-900/30 p-4 rounded-lg border-t-2 border-red-500/80 space-y-4">
                         <div className="flex items-start gap-3">
                             <div className="bg-red-500/10 p-2 rounded-full flex-shrink-0">
@@ -83,13 +168,13 @@ const TrendAnalysisCard: React.FC<{ analysis: TrendAnalysis }> = ({ analysis }) 
                             {analysis.fadingConcepts.map((item, index) => (
                                  <div key={index} className="pl-3 border-l-2 border-red-500/50">
                                     <p className="font-semibold text-slate-200">{item.concept}</p>
-                                    <p className="text-sm text-slate-400 mt-1">{item.justification}</p>
+                                    <TextWithCitations text={item.justification} sources={sources} className="text-sm text-slate-400 mt-1" />
                                 </div>
                             ))}
                         </div>
                     </div>
                 )}
-                {analysis.emergingConcepts?.length > 0 && (
+                {Array.isArray(analysis.emergingConcepts) && analysis.emergingConcepts.length > 0 && (
                     <div className="bg-green-900/30 p-4 rounded-lg border-t-2 border-green-500/80 space-y-4">
                         <div className="flex items-start gap-3">
                             <div className="bg-green-500/10 p-2 rounded-full flex-shrink-0">
@@ -104,7 +189,7 @@ const TrendAnalysisCard: React.FC<{ analysis: TrendAnalysis }> = ({ analysis }) 
                             {analysis.emergingConcepts.map((item, index) => (
                                  <div key={index} className="pl-3 border-l-2 border-green-500/50">
                                     <p className="font-semibold text-slate-200">{item.concept}</p>
-                                    <p className="text-sm text-slate-400 mt-1">{item.justification}</p>
+                                     <TextWithCitations text={item.justification} sources={sources} className="text-sm text-slate-400 mt-1" />
                                 </div>
                             ))}
                         </div>
@@ -116,36 +201,15 @@ const TrendAnalysisCard: React.FC<{ analysis: TrendAnalysis }> = ({ analysis }) 
 };
 
 
-const KeyQuestionCard: React.FC<{ question: string }> = ({ question }) => {
+const KeyQuestionCard: React.FC<{ question: string, sources: GroundingSource[] }> = ({ question, sources }) => {
     return (
         <div className="bg-gradient-to-tr from-slate-900 to-purple-900/50 border-2 border-purple-500 rounded-2xl p-6 shadow-2xl shadow-purple-500/10">
             <div className="flex flex-col items-center text-center">
                  <BrainIcon className="h-12 w-12 text-purple-300 mb-4" />
                  <h2 className="text-sm font-bold uppercase tracking-widest text-purple-400 mb-2">Key Strategic Question</h2>
-                 <p className="text-2xl md:text-3xl font-bold text-slate-100 leading-tight">
-                    "{question}"
-                 </p>
-            </div>
-        </div>
-    )
-};
-
-const WorkspaceItemCard: React.FC<{ item: WorkspaceItem }> = ({ item }) => {
-    const iconMap: Record<WorkspaceItem['type'], React.ReactNode> = {
-        article: <ArticleIcon />,
-        patent: <PatentIcon />,
-    };
-    const icon = iconMap[item.type];
-
-    return (
-         <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700 rounded-lg p-4">
-            <div className="flex items-start gap-4">
-                <div className="text-blue-400 mt-1">{icon}</div>
-                <div className="flex-1">
-                    <h3 className="text-lg font-semibold text-slate-100 mb-1">{item.title}</h3>
-                    <p className="text-slate-300 leading-relaxed text-sm">{item.summary}</p>
-                    <p className="text-xs text-slate-500 font-mono mt-3 pt-3 border-t border-slate-700/50">{item.details}</p>
-                </div>
+                 <div className="text-2xl md:text-3xl font-bold text-slate-100 leading-tight">
+                    "<TextWithCitations text={question} sources={sources} as="span" />"
+                 </div>
             </div>
         </div>
     )
@@ -195,7 +259,8 @@ const ConfidenceMeter: React.FC<{ confidence: number }> = ({ confidence }) => {
 const ResearchOpportunityCard: React.FC<{
     opportunity: ResearchOpportunity,
     onHighlight: (nodeIds: string[] | null) => void,
-}> = ({ opportunity, onHighlight }) => {
+    sources: GroundingSource[],
+}> = ({ opportunity, onHighlight, sources }) => {
     return (
         <div 
             className="bg-gradient-to-br from-slate-800/80 to-slate-900/30 border-2 border-slate-700 rounded-lg p-5 transition-all duration-300 hover:shadow-2xl hover:shadow-purple-500/20 hover:border-purple-400"
@@ -208,7 +273,7 @@ const ResearchOpportunityCard: React.FC<{
                 </div>
                 <div className="flex-1 space-y-4">
                     <h3 className="text-xl font-bold text-slate-100">{opportunity.title}</h3>
-                    <p className="text-slate-300 leading-relaxed text-sm">{opportunity.justification}</p>
+                    <TextWithCitations text={opportunity.justification} sources={sources} className="text-slate-300 text-sm"/>
                     
                     <div className="pt-4 border-t border-slate-700 space-y-4">
                         <div className="flex flex-wrap items-start gap-x-6 gap-y-3 text-sm">
@@ -218,7 +283,7 @@ const ResearchOpportunityCard: React.FC<{
                             </div>
                             <div>
                                 <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Potential Impact</p>
-                                <p className="text-slate-300 font-medium">{opportunity.potentialImpact}</p>
+                                <TextWithCitations text={opportunity.potentialImpact} sources={sources} className="text-slate-300 font-medium"/>
                             </div>
                         </div>
                         <ConfidenceMeter confidence={opportunity.confidence} />
@@ -229,27 +294,77 @@ const ResearchOpportunityCard: React.FC<{
     )
 };
 
-const BriefingRenderer = ({ text }: { text: string }) => {
+const CriticalAnalysisCard: React.FC<{ contradictions: Contradiction[], synergies: Synergy[], sources: GroundingSource[] }> = ({ contradictions, synergies, sources }) => {
+    if (contradictions.length === 0 && synergies.length === 0) {
+        return null;
+    }
+
+    return (
+        <div className="bg-gradient-to-b from-slate-900 to-slate-800/50 border border-slate-700 rounded-lg p-6">
+            <h2 className="text-2xl font-bold text-slate-100 mb-2 text-center">Critical Analysis</h2>
+            <p className="text-sm text-slate-400 mb-6 text-center max-w-2xl mx-auto">The AI's synthesis of where the literature disagrees or could be combined for novel insights. This goes beyond what a standard search can provide.</p>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                {/* Contradictions */}
+                <div className="space-y-4">
+                    <div className="flex items-center gap-3">
+                        <ConflictIcon className="h-7 w-7 text-amber-400" />
+                        <h3 className="text-xl font-semibold text-amber-300">Contradictions & Gaps</h3>
+                    </div>
+                    {contradictions.length > 0 ? (
+                        <ul className="space-y-4">
+                            {contradictions.map(item => (
+                                <li key={item.id} className="p-4 bg-amber-900/20 border-l-4 border-amber-500 rounded-r-lg">
+                                    <TextWithCitations text={item.statement} sources={sources} className="text-slate-200" />
+                                </li>
+                            ))}
+                        </ul>
+                    ) : <p className="text-slate-500 text-sm">No significant contradictions identified.</p>}
+                </div>
+
+                {/* Synergies */}
+                <div className="space-y-4">
+                    <div className="flex items-center gap-3">
+                        <SynergyIcon className="h-7 w-7 text-cyan-400" />
+                        <h3 className="text-xl font-semibold text-cyan-300">Synergies & Connections</h3>
+                    </div>
+                    {synergies.length > 0 ? (
+                        <ul className="space-y-4">
+                            {synergies.map(item => (
+                                <li key={item.id} className="p-4 bg-cyan-900/20 border-l-4 border-cyan-500 rounded-r-lg">
+                                    <TextWithCitations text={item.statement} sources={sources} className="text-slate-200" />
+                                </li>
+                            ))}
+                        </ul>
+                    ) : <p className="text-slate-500 text-sm">No novel synergies identified.</p>}
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const BriefingRenderer: React.FC<{ text: string, sources: GroundingSource[] }> = ({ text, sources }) => {
+    if (!text) return null;
     const paragraphs = text.split('\n').filter(p => p.trim());
     return (
-        <div className="text-slate-300 leading-relaxed space-y-2 text-sm">
+        <div className="text-slate-300 leading-relaxed space-y-4 text-sm">
             {paragraphs.map((paragraph, index) => {
                 if (paragraph.startsWith('### ')) {
                     return <h3 key={index} className="text-lg font-semibold text-purple-300 mt-4 first:mt-0">{paragraph.substring(4)}</h3>;
                 }
-                
-                const parts = paragraph.split(/(\*\*.*?\*\*)/g);
-                
-                return (
-                    <p key={index}>
-                        {parts.map((part, i) => {
-                            if (part.startsWith('**') && part.endsWith('**')) {
-                                return <strong key={i} className="font-bold text-slate-100">{part.slice(2, -2)}</strong>;
-                            }
-                            return <span key={i}>{part.replace(/^\s*[-*]\s*/, '• ')}</span>;
-                        })}
-                    </p>
-                );
+                 const isListItem = /^\s*[-*]\s*/.test(paragraph);
+                 const content = paragraph.replace(/^\s*[-*]\s*/, '');
+
+                 if(isListItem) {
+                    return (
+                        <div key={index} className="flex items-start gap-2 pl-4">
+                            <span className="text-purple-300 mt-1">•</span>
+                            <TextWithCitations text={content} sources={sources} />
+                        </div>
+                    );
+                 }
+
+                return <TextWithCitations key={index} text={content} sources={sources} />;
             })}
         </div>
     );
@@ -268,7 +383,7 @@ const TabButton = ({ label, icon, isActive, onClick, count }: { label: string, i
     >
         {icon}
         <span className="hidden sm:inline">{label}</span>
-        {count !== undefined && count > 0 && (
+        {count !== undefined && (
             <span className={`ml-1 px-2 py-0.5 rounded-full text-xs ${isActive ? 'bg-purple-400/20 text-purple-300' : 'bg-slate-700 text-slate-300'}`}>
                 {count}
             </span>
@@ -276,20 +391,40 @@ const TabButton = ({ label, icon, isActive, onClick, count }: { label: string, i
     </button>
 );
 
+interface WorkspaceViewProps {
+  workspace: WorkspaceState | null;
+  isLoading: boolean;
+  error: string | null;
+  hasSearched: boolean;
+  loadingMessage: string;
+  onNodeClick: (node: KnowledgeGraphNode) => void;
+  selectedNodeId: string | null;
+  activeTab: 'priorities' | 'knowledge_web' | 'sources';
+  setActiveTab: React.Dispatch<React.SetStateAction<'priorities' | 'knowledge_web' | 'sources'>>;
+}
 
 const WorkspaceView: React.FC<WorkspaceViewProps> = ({ workspace, isLoading, error, hasSearched, loadingMessage, onNodeClick, selectedNodeId, activeTab, setActiveTab }) => {
   const [highlightedNodeIds, setHighlightedNodeIds] = useState<string[] | null>(null);
   
-  useEffect(() => {
-    if (workspace && !isLoading) {
-      if (workspace.trendAnalysis) {
-        setActiveTab('knowledge_web');
-      } else if (activeTab === 'knowledge_web' && !workspace.knowledgeGraph) {
-        // If KG tab is active but there's no graph, switch to priorities
-        setActiveTab('priorities');
-      }
-    }
-  }, [workspace, isLoading, activeTab, setActiveTab]);
+  const isTrendAnalysis = !!workspace?.trendAnalysis;
+
+  const hasTextCitations = useMemo(() => {
+    if (!workspace) return false;
+    const textCorpus = [
+      workspace.synthesis,
+      workspace.keyQuestion,
+      ...(workspace.researchOpportunities || []).map(o => o.justification),
+      ...(workspace.contradictions || []).map(c => c.statement),
+      ...(workspace.synergies || []).map(s => s.statement),
+      workspace.trendAnalysis?.summary,
+      ...(Array.isArray(workspace.trendAnalysis?.emergingConcepts) ? workspace.trendAnalysis.emergingConcepts : []).map(c => c.justification),
+      ...(Array.isArray(workspace.trendAnalysis?.fadingConcepts) ? workspace.trendAnalysis.fadingConcepts : []).map(c => c.justification),
+      ...(Array.isArray(workspace.trendAnalysis?.keyShifts) ? workspace.trendAnalysis.keyShifts : []).map(s => s.justification),
+    ].filter(Boolean).join(' ');
+    
+    // Regex to find citations like [1], [1, 2], [1,2, 16]
+    return /\[\s*\d+(?:\s*,\s*\d+)*\s*\]/.test(textCorpus);
+  }, [workspace]);
 
   const researchOpportunitiesByLens = useMemo(() => {
     if (!workspace?.researchOpportunities) {
@@ -338,34 +473,44 @@ const WorkspaceView: React.FC<WorkspaceViewProps> = ({ workspace, isLoading, err
 
       {workspace && (
         <>
+            <AnalysisMeta workspace={workspace} />
+
             <div className="flex gap-2 sm:gap-4 border-b border-slate-700">
+                {!isTrendAnalysis && (
+                    <TabButton
+                        label="Priorities"
+                        icon={<LightbulbIcon className="h-5 w-5" />}
+                        isActive={activeTab === 'priorities'}
+                        onClick={() => setActiveTab('priorities')}
+                    />
+                )}
                 <TabButton
-                    label="Priorities"
-                    icon={<LightbulbIcon className="h-5 w-5" />}
-                    isActive={activeTab === 'priorities'}
-                    onClick={() => setActiveTab('priorities')}
-                />
-                <TabButton
-                    label="Knowledge Web"
-                    icon={<NetworkIcon className="h-5 w-5" />}
+                    label={isTrendAnalysis ? "Evolution Analysis" : "Knowledge Web"}
+                    icon={isTrendAnalysis ? <ClockIcon className="h-5 w-5" /> : <NetworkIcon className="h-5 w-5" />}
                     isActive={activeTab === 'knowledge_web'}
                     onClick={() => setActiveTab('knowledge_web')}
                 />
-                {(workspace.items.length > 0 || workspace.sources.length > 0) && (
-                    <TabButton
-                        label="Sources"
-                        icon={<MethodIcon className="h-5 w-5" />}
-                        isActive={activeTab === 'sources'}
-                        onClick={() => setActiveTab('sources')}
-                        count={workspace.items.length + workspace.sources.length}
-                    />
-                )}
+                <TabButton
+                    label="Grounding Sources"
+                    icon={<MethodIcon className="h-5 w-5" />}
+                    isActive={activeTab === 'sources'}
+                    onClick={() => setActiveTab('sources')}
+                    count={workspace.sources.length}
+                />
             </div>
 
             <div className="py-4">
-                {activeTab === 'priorities' && (
+                {activeTab === 'priorities' && !isTrendAnalysis && (
                     <div className="space-y-8">
-                      {workspace.researchOpportunities.length > 0 && (
+                      {workspace.keyQuestion && (
+                        <KeyQuestionCard question={workspace.keyQuestion} sources={workspace.sources} />
+                      )}
+
+                      {(workspace.contradictions.length > 0 || workspace.synergies.length > 0) && (
+                        <CriticalAnalysisCard contradictions={workspace.contradictions} synergies={workspace.synergies} sources={workspace.sources} />
+                      )}
+                      
+                      {workspace.researchOpportunities.length > 0 ? (
                         <div className="space-y-6">
                             <div className="flex items-center gap-3">
                                 <LightbulbIcon className="h-7 w-7 text-yellow-300 flex-shrink-0" />
@@ -377,30 +522,50 @@ const WorkspaceView: React.FC<WorkspaceViewProps> = ({ workspace, isLoading, err
                                         From the <span className="font-bold">{LENS_DEFINITIONS.find(l => l.id === lens)?.name || lens}</span> Perspective
                                     </h3>
                                     {opportunities.map(op => (
-                                        <ResearchOpportunityCard key={op.id} opportunity={op} onHighlight={setHighlightedNodeIds} />
+                                        <ResearchOpportunityCard key={op.id} opportunity={op} onHighlight={setHighlightedNodeIds} sources={workspace.sources} />
+                                    ))}
+                                </div>
+                            ))}
+                        </div>
+                      ) : (
+                           !workspace.keyQuestion && <div className="text-center text-slate-500 py-12">The AI did not identify any priority research directions or a key question for this topic.</div>
+                      )}
+                    </div>
+                )}
+
+                {activeTab === 'knowledge_web' && (
+                    <div className="space-y-8">
+                      {isTrendAnalysis && workspace.trendAnalysis && (
+                          <TrendAnalysisCard analysis={workspace.trendAnalysis} sources={workspace.sources} />
+                      )}
+                      {isTrendAnalysis && workspace.keyQuestion && (
+                          <KeyQuestionCard question={workspace.keyQuestion} sources={workspace.sources} />
+                      )}
+                      
+                      {isTrendAnalysis && workspace.researchOpportunities.length > 0 && (
+                        <div className="space-y-6">
+                            <div className="flex items-center gap-3">
+                                <LightbulbIcon className="h-7 w-7 text-yellow-300 flex-shrink-0" />
+                                <h2 className="text-2xl font-bold text-slate-100">AI-Proposed Future Directions</h2>
+                            </div>
+                            {Object.entries(researchOpportunitiesByLens).map(([lens, opportunities]) => (
+                                <div key={lens} className="space-y-4">
+                                    <h3 className="text-lg font-semibold text-purple-300 pl-1">
+                                        From the <span className="font-bold">{LENS_DEFINITIONS.find(l => l.id === lens)?.name || lens}</span> Perspective
+                                    </h3>
+                                    {opportunities.map(op => (
+                                        <ResearchOpportunityCard key={op.id} opportunity={op} onHighlight={setHighlightedNodeIds} sources={workspace.sources} />
                                     ))}
                                 </div>
                             ))}
                         </div>
                       )}
-                      {workspace.keyQuestion && (
-                        <KeyQuestionCard question={workspace.keyQuestion} />
-                      )}
-                      {workspace.researchOpportunities.length === 0 && !workspace.keyQuestion && (
-                            <div className="text-center text-slate-500 py-12">The AI did not identify any priority research directions or a key question for this topic.</div>
-                      )}
-                    </div>
-                )}
-                {activeTab === 'knowledge_web' && (
-                    <div className="space-y-8">
-                      {workspace.trendAnalysis && (
-                          <TrendAnalysisCard analysis={workspace.trendAnalysis} />
-                      )}
+
                       <div className="p-4 sm:p-6 bg-slate-900/50 backdrop-blur-sm rounded-lg border border-slate-700">
                           <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-4 mb-2">
-                              <NetworkIcon className="h-7 w-7 text-teal-300" />
+                              {isTrendAnalysis ? <ClockIcon className="h-7 w-7 text-teal-300" /> : <NetworkIcon className="h-7 w-7 text-teal-300" />}
                               <h2 className="text-2xl font-bold text-slate-100 text-center sm:text-left">
-                                  Longevity Knowledge Web
+                                  {isTrendAnalysis ? "Evolution Knowledge Web" : "Longevity Knowledge Web"}
                               </h2>
                           </div>
                           <p className="text-slate-400 text-center sm:text-left mb-4">
@@ -429,47 +594,47 @@ const WorkspaceView: React.FC<WorkspaceViewProps> = ({ workspace, isLoading, err
                             <h2 className="text-xl font-bold text-slate-100 mb-3">
                                 Strategic Briefing
                             </h2>
-                            <BriefingRenderer text={workspace.synthesis} />
+                            <BriefingRenderer text={workspace.synthesis} sources={workspace.sources} />
                         </div>
                       )}
                     </div>
                 )}
+
                 {activeTab === 'sources' && (
                     <div className="space-y-8">
-                        {workspace.items.length > 0 && (
+                        {workspace.sources.length > 0 ? (
                             <div>
-                            <h4 className="text-2xl font-bold text-slate-100 mb-4">Sourced Items ({workspace.items.length})</h4>
-                            <div className="grid grid-cols-1 gap-4">
-                                {workspace.items.map((item) => (
-                                    <WorkspaceItemCard key={item.id} item={item} />
-                                ))}
+                                <h2 className="text-2xl font-bold text-slate-100 mb-4">Grounding Sources ({workspace.sources.length})</h2>
+                                <p className="text-sm text-slate-400 mb-6">The AI agent used the following web pages as its knowledge base to generate the analysis. These are the verifiable sources for the information presented.</p>
+                                <ul className="space-y-2">
+                                    {workspace.sources.map((source, index) => (
+                                    <li key={`${source.uri}-${index}`} className="text-sm">
+                                        <a
+                                        href={source.uri}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center text-blue-400 hover:text-blue-300 hover:underline transition-colors group"
+                                        >
+                                            <span className="text-xs font-mono bg-slate-700 text-slate-300 rounded px-1.5 py-0.5 mr-2">[{index + 1}]</span>
+                                            <LinkIcon className="h-4 w-4 mr-2 flex-shrink-0" />
+                                            <span className="truncate group-hover:underline">{source.title || source.uri}</span>
+                                        </a>
+                                    </li>
+                                    ))}
+                                </ul>
                             </div>
+                        ) : (
+                             <div className="text-center text-slate-400 py-12 px-6 bg-slate-800/50 rounded-lg">
+                                <h3 className="text-xl font-bold text-slate-200">
+                                    {hasTextCitations ? "Inline Citations Found" : "No Grounding Sources Provided"}
+                                </h3>
+                                <p className="mt-2 max-w-2xl mx-auto">
+                                    {hasTextCitations 
+                                        ? "The AI agent included citations in its analysis (e.g., [1], [2]), but did not provide corresponding web links in its structured output. This can occur if sources are from paywalled journals, academic papers not easily accessible online, or part of the model's pre-training data."
+                                        : "The AI did not cite any verifiable grounding sources for this analysis."
+                                    }
+                                </p>
                             </div>
-                        )}
-                        
-                        {workspace.sources.length > 0 && (
-                            <div className="mt-8 pt-6 border-t border-slate-700">
-                            <h4 className="text-lg font-semibold text-slate-300 mb-3">Grounding Sources</h4>
-                            <ul className="space-y-2">
-                                {workspace.sources.map((source, index) => (
-                                <li key={`${source.uri}-${index}`} className="text-sm">
-                                    <a
-                                    href={source.uri}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="flex items-center text-blue-400 hover:text-blue-300 hover:underline transition-colors"
-                                    >
-                                    <LinkIcon />
-                                    <span className="truncate">{source.title || source.uri}</span>
-                                    </a>
-                                </li>
-                                ))}
-                            </ul>
-                            </div>
-                        )}
-
-                        {workspace.items.length === 0 && workspace.sources.length === 0 && (
-                             <div className="text-center text-slate-500 py-12">The AI did not cite any sources for this analysis.</div>
                         )}
                     </div>
                 )}

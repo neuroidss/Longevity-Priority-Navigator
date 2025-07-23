@@ -1,5 +1,7 @@
 
 
+
+
 import React, { useState, useEffect } from 'react';
 import { AgentType, type AnalysisLens, type ChatMessage, type KnowledgeGraphNode } from './types';
 import { chatWithWorkspace } from './services/geminiService';
@@ -108,7 +110,7 @@ const App: React.FC = () => {
                         chatHistory={chatHistory}
                         isChatting={isChatting}
                         onSendMessage={handleSendMessage}
-                        isWorkspaceReady={!!workspace && (!!workspace.items.length || !!workspace.knowledgeGraph)}
+                        isWorkspaceReady={!!workspace && !!workspace.knowledgeGraph}
                         selectedNode={selectedNode}
                         onClearSelectedNode={() => setSelectedNode(null)}
                     />
@@ -124,7 +126,7 @@ const App: React.FC = () => {
                 <AgentControlPanel
                     topic={topic}
                     setTopic={setTopic}
-                    onDispatchAgent={(lens, agentType) => handleDispatchAgent(lens, agentType, setChatHistory, setSelectedNode)}
+                    onDispatchAgent={(lens, agentType) => handleDispatchAgent(lens, agentType, setActiveTab, setChatHistory, setSelectedNode)}
                     isLoading={isLoading || isChatting}
                     model={model}
                     setModel={setModel}

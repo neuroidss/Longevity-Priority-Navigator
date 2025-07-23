@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { KnowledgeGraph, KnowledgeGraphNode, TrendAnalysis } from '../types';
-import { GeneIcon, ProteinIcon, CompoundIcon, PathwayIcon, DiseaseIcon, HypothesisIcon, LightbulbIcon, MethodIcon, ResultIcon, ObservationIcon } from './icons';
+import { GeneIcon, ProteinIcon, CompoundIcon, PathwayIcon, DiseaseIcon, HypothesisIcon, LightbulbIcon, MethodIcon, ResultIcon, ObservationIcon, BeakerIcon, GearIcon } from './icons';
 
 interface KnowledgeGraphViewProps {
     graph: KnowledgeGraph;
@@ -39,6 +39,8 @@ const NodeIcon: React.FC<{ type: KnowledgeGraphNode['type']; className?: string 
         case 'Method': return <MethodIcon className={className} />;
         case 'Result': return <ResultIcon className={className} />;
         case 'Observation': return <ObservationIcon className={className} />;
+        case 'Biomarker': return <BeakerIcon className={className} />;
+        case 'Tool': return <GearIcon className={className} />;
         case 'Topic': return <div className="text-yellow-300">
             <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 20 20" fill="currentColor">
               <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.5 7a.5.5 0 00-1 0v6a.5.5 0 001 0V7zM11.5 7a.5.5 0 00-1 0v6a.5.5 0 001 0V7z" clipRule="evenodd" />
@@ -61,6 +63,8 @@ const getNodeColor = (type: KnowledgeGraphNode['type']) => {
         Method: { fill: 'rgba(100, 116, 139, 0.1)', stroke: '#64748B', text: '#CBD5E1' },
         Result: { fill: 'rgba(34, 211, 238, 0.1)', stroke: '#22D3EE', text: '#A5F3FC' },
         Observation: { fill: 'rgba(244, 114, 182, 0.1)', stroke: '#F472B6', text: '#FBCFE8' },
+        Biomarker: { fill: 'rgba(45, 212, 191, 0.1)', stroke: '#14B8A6', text: '#A7F3D0' },
+        Tool: { fill: 'rgba(100, 116, 139, 0.1)', stroke: '#64748B', text: '#E2E8F0' },
         default: { fill: 'rgba(100, 116, 139, 0.1)', stroke: '#64748B', text: '#CBD5E1' },
     };
     return colors[type] || colors.default;

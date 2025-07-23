@@ -1,6 +1,3 @@
-
-
-
 import { useState, useCallback } from 'react';
 
 export const useDebugLog = (storageKey: string) => {
@@ -14,9 +11,8 @@ export const useDebugLog = (storageKey: string) => {
     }, []);
 
     const handleResetProgress = useCallback(() => {
-        if (window.confirm("Are you sure you want to reset all progress? This will clear your workspace and chat history.")) {
+        if (window.confirm("Are you sure you want to reset all progress? This will clear your workspace and chat history. Your API key will be preserved.")) {
             localStorage.removeItem(storageKey);
-            sessionStorage.removeItem('google-api-key');
             addLog("Application state has been reset.");
             window.location.reload();
         }
