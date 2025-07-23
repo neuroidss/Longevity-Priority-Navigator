@@ -1,6 +1,8 @@
 
 # Longevity Priority Navigator
 
+Live Demo: https://neuroidss.github.io/Longevity-Priority-Navigator/
+
 This project is a focused prototype for an AI-powered system designed to navigate and prioritize research in the science of longevity. It directly addresses the **"Longevity Priority"** and **"Longevity Knowledge Graph"** challenges from the Agentic AI x Longevity hackathon.
 
 > **Hackathon Goal:** "Create an AI system that... forms priority research directions in the field of aging... build a living knowledge graph... justify why a particular task is important right now... [and] allow the user to chat with the graph as an intelligent assistant."
