@@ -1,6 +1,7 @@
 
 
 
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { type WorkspaceState, AgentType, type ChatMessage, type AgentResponse, type KnowledgeGraph, type KnowledgeGraphNode, type AnalysisLens } from '../types';
 import { dispatchAgent } from '../services/geminiService';
@@ -9,8 +10,8 @@ import { useAppSettings } from './useAppSettings';
 const FEATURED_ANALYSIS: WorkspaceState = {
     topic: "AI-driven longevity research prioritization",
     sources: [
-        { uri: '#', title: 'Presentation: Will AI help us defeat aging? - Andrei Tarkhov, Applied AI, Retro Biosciences' },
-        { uri: '#', title: 'Presentation: Using AI to accelerate longevity research - Danil Salimov, NTU "Sirius", Blastim Graduate' }
+        { uri: '/Tarkhov_AI_for_Longevity.md', title: 'Presentation: Искусственный интеллект поможет нам победить старение? (Андрей Тархов)' },
+        { uri: '/Salimov_AI_System_for_Longevity.md', title: 'Presentation: Использование ИИ для ускорения исследований в области долголетия (Данил Салимов)' }
     ],
     knowledgeGraph: {
         nodes: [
@@ -37,18 +38,18 @@ const FEATURED_ANALYSIS: WorkspaceState = {
         ]
     },
     synthesis: `### Current Landscape
-The longevity field faces a "chicken-and-egg" dilemma: we need better biomarkers to validate interventions, but we need effective interventions to discover sensitive biomarkers. Current strategies range from high-throughput in-vitro screens to analyzing existing FDA-approved drugs like SGLT2 inhibitors which have shown promising signals in reducing all-cause mortality.
+The longevity field faces a "chicken-and-egg" dilemma: we need better biomarkers to validate interventions, but we need effective interventions to discover sensitive biomarkers [1]. Current strategies range from high-throughput in-vitro screens to analyzing existing FDA-approved drugs like SGLT2 inhibitors which have shown promising signals in reducing all-cause mortality [1].
 
 ### Key Challenges (Translational Gaps & Biomarker Noise)
-The primary hurdles are translating findings from model organisms to humans and the high noise-to-signal ratio in aging biomarkers. This makes it difficult to assess the true impact of any intervention.
+The primary hurdles are translating findings from model organisms to humans and the high noise-to-signal ratio in aging biomarkers. This makes it difficult to assess the true impact of any intervention [1].
 
 ### Strategic Implications
-An AI-driven system can break this deadlock by creating a dynamic knowledge graph that integrates multi-modal data (genomics, clinical, patents). This allows for the identification of conserved pathways, robust biomarker candidates, and the prioritization of research directions that have the highest probability of translating to humans.`,
+An AI-driven system can break this deadlock by creating a dynamic knowledge graph that integrates multi-modal data (genomics, clinical, patents). This allows for the identification of conserved pathways, robust biomarker candidates, and the prioritization of research directions that have the highest probability of translating to humans [2].`,
     researchOpportunities: [
         {
             id: 'ro-1',
             title: 'Develop a "Chicken-and-Egg Breaker": Co-develop interventions with biomarkers',
-            justification: 'Instead of sequential development, this approach uses AI to simultaneously screen for compounds that induce a rejuvenation signal in-vitro AND identify the most sensitive transcriptomic or proteomic features that report on that signal. This creates a paired intervention-biomarker system from the start.',
+            justification: 'Instead of sequential development, this approach uses AI to simultaneously screen for compounds that induce a rejuvenation signal in-vitro AND identify the most sensitive transcriptomic or proteomic features that report on that signal [1, 2]. This creates a paired intervention-biomarker system from the start.',
             relatedNodeIds: ['biomarkers', 'interventions', 'invitro-screening'],
             lens: 'High-Risk/High-Reward',
             confidence: 0.85,
@@ -58,7 +59,7 @@ An AI-driven system can break this deadlock by creating a dynamic knowledge grap
         {
             id: 'ro-2',
             title: 'Validate SGLT2/GLP1 as Anti-Aging Drugs via Novel Biomarker Discovery',
-            justification: "Current data shows these drugs reduce all-cause mortality, but the 'pro-longevity' mechanisms are unclear. This research would use multi-omics data from patients on these drugs to identify novel, upstream biomarkers of their effects, moving beyond standard clinical markers to find true signatures of slowed aging.",
+            justification: "Current data shows these drugs reduce all-cause mortality, but the 'pro-longevity' mechanisms are unclear. This research would use multi-omics data from patients on these drugs to identify novel, upstream biomarkers of their effects, moving beyond standard clinical markers to find true signatures of slowed aging [1].",
             relatedNodeIds: ['sglt2-glp1', 'all-cause-mortality', 'biomarkers'],
             lens: 'Clinical Translation',
             confidence: 0.9,
@@ -67,12 +68,12 @@ An AI-driven system can break this deadlock by creating a dynamic knowledge grap
         }
     ],
     contradictions: [
-        { id: 'con-1', statement: "High-throughput in-vitro screens often identify compounds with high toxicity or off-target effects (e.g., PAINS) that fail in subsequent in-vivo validation." },
+        { id: 'con-1', statement: "High-throughput in-vitro screens often identify compounds with high toxicity or off-target effects (e.g., PAINS) that fail in subsequent in-vivo validation [1]." },
     ],
     synergies: [
-        { id: 'syn-1', statement: "The observed all-cause mortality reduction from SGLT2 inhibitors (a clinical result) could be mechanistically linked to fundamental processes like cellular senescence, providing a bridge between clinical outcomes and basic science." }
+        { id: 'syn-1', statement: "The observed all-cause mortality reduction from SGLT2 inhibitors (a clinical result) could be mechanistically linked to fundamental processes like cellular senescence, providing a bridge between clinical outcomes and basic science [1]." }
     ],
-    keyQuestion: "How can we systematically distinguish genuine anti-aging effects from disease-specific treatments in human data?",
+    keyQuestion: "How can we systematically distinguish genuine anti-aging effects from disease-specific treatments in human data? [1]",
     trendAnalysis: null,
     timestamp: 0 // Will be updated on load
 };
