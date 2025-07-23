@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { type WorkspaceState, AgentType, type ChatMessage, type AgentResponse, type KnowledgeGraph, type KnowledgeGraphNode, type AnalysisLens } from '../types';
 import { dispatchAgent } from '../services/geminiService';
@@ -7,8 +8,8 @@ import { useAppSettings } from './useAppSettings';
 const FEATURED_ANALYSIS: WorkspaceState = {
     topic: "AI-driven longevity research prioritization",
     sources: [
-        { uri: '/Tarkhov_AI_for_Longevity.md', title: 'Presentation: Can Artificial Intelligence Help Us Defeat Aging? (Andrey Tarkhov)' },
-        { uri: '/Salimov_AI_System_for_Longevity.md', title: 'Presentation: Using AI to Accelerate Longevity Research (Danil Salimov)' }
+        { uri: 'https://raw.githubusercontent.com/neuroidss/Longevity-Priority-Navigator/main/Tarkhov_AI_for_Longevity.md', title: 'Presentation: Can Artificial Intelligence Help Us Defeat Aging? (Andrey Tarkhov)' },
+        { uri: 'https://raw.githubusercontent.com/neuroidss/Longevity-Priority-Navigator/main/Salimov_AI_System_for_Longevity.md', title: 'Presentation: Using AI to Accelerate Longevity Research (Danil Salimov)' }
     ],
     knowledgeGraph: {
         nodes: [

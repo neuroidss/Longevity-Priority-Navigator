@@ -1,4 +1,5 @@
 
+
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { type WorkspaceState, type KnowledgeGraphNode, type ResearchOpportunity, type AnalysisLens, type TrendAnalysis, Contradiction, Synergy, GroundingSource } from '../types';
 import LoadingSpinner from './LoadingSpinner';
@@ -73,7 +74,7 @@ const Citation: React.FC<{ citationText: string; allSources: GroundingSource[] }
 };
 
 
-const TextWithCitations: React.FC<{ text: string; sources: GroundingSource[]; className?: string; as?: 'p' | 'span' }> = ({ text, sources, className, as = 'p' }) => {
+export const TextWithCitations: React.FC<{ text: string; sources: GroundingSource[]; className?: string; as?: 'p' | 'span' }> = ({ text, sources, className, as = 'p' }) => {
     const Component = as;
     const renderText = () => {
         if (!text) return '';

@@ -2,9 +2,12 @@
 
 
 
+
+
 import React, { useState, useRef, useEffect } from 'react';
-import { ChatMessage, KnowledgeGraphNode } from '../types';
+import { ChatMessage, KnowledgeGraphNode, GroundingSource } from '../types';
 import { LightbulbIcon, NetworkIcon } from './icons';
+import { TextWithCitations } from './ResultsDisplay';
 
 const generateContextualQuestions = (node: KnowledgeGraphNode): string[] => {
     const questions: string[] = [];
@@ -20,15 +23,6 @@ const generateContextualQuestions = (node: KnowledgeGraphNode): string[] => {
     return questions.slice(0, 3);
 };
 
-const formatMessage = (text: string) => {
-    let html = text.replace(/\n/g, '<br />');
-    html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-    html = html.replace(/(?:^|\n)(?:\* |- )([^\n<]+)/g, '<ul><li style="margin-left: 20px; padding-left: 5px;">$1</li></ul>');
-    html = html.replace(/<\/ul><br \/><ul>/g, '');
-    return html;
-};
-
-
 interface ChatViewProps {
     chatHistory: ChatMessage[];
     isChatting: boolean;
@@ -36,10 +30,11 @@ interface ChatViewProps {
     isWorkspaceReady: boolean;
     selectedNode: KnowledgeGraphNode | null;
     onClearSelectedNode: () => void;
+    sources: GroundingSource[];
 }
 
 const ChatView: React.FC<ChatViewProps> = ({ 
-    chatHistory, isChatting, onSendMessage, isWorkspaceReady, selectedNode, onClearSelectedNode 
+    chatHistory, isChatting, onSendMessage, isWorkspaceReady, selectedNode, onClearSelectedNode, sources
 }) => {
     const [input, setInput] = useState('');
     const endOfMessagesRef = useRef<HTMLDivElement>(null);
@@ -57,6 +52,7 @@ const ChatView: React.FC<ChatViewProps> = ({
 
     const handleContextualSend = (question: string) => {
         onSendMessage(question);
+        onClearSelectedNode();
     };
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -155,8 +151,29 @@ const ChatView: React.FC<ChatViewProps> = ({
                                     <div className="w-2 h-2 bg-slate-400 rounded-full animate-pulse delay-150"></div>
                                     <div className="w-2 h-2 bg-slate-400 rounded-full animate-pulse delay-300"></div>
                                 </div>
+                            ) : msg.sender === 'user' ? (
+                                <div className="text-sm leading-relaxed" style={{ whiteSpace: 'pre-wrap' }}>{msg.text}</div>
                             ) : (
-                                <div className="text-sm leading-relaxed" dangerouslySetInnerHTML={{ __html: formatMessage(msg.text) }} />
+                                <div className="text-sm leading-relaxed space-y-2">
+                                    {msg.text.split('\n').map((line, index) => {
+                                        const isListItem = /^\s*[-*]\s*/.test(line);
+                                        const content = line.replace(/^\s*[-*]\s*/, '');
+
+                                        if (isListItem) {
+                                            return (
+                                                <div key={index} className="flex items-start gap-2">
+                                                    <span className="text-purple-300 mt-1 flex-shrink-0">•</span>
+                                                    <TextWithCitations text={content} sources={sources} as="span" />
+                                                </div>
+                                            );
+                                        }
+                                        return (
+                                            <p key={index}>
+                                                <TextWithCitations text={content} sources={sources} as="span" />
+                                            </p>
+                                        );
+                                    })}
+                                </div>
                             )}
                         </div>
                     </div>

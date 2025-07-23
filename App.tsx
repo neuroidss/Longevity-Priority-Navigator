@@ -2,6 +2,7 @@
 
 
 
+
 import React, { useState, useEffect } from 'react';
 import { AgentType, type AnalysisLens, type ChatMessage, type KnowledgeGraphNode } from './types';
 import { chatWithWorkspace } from './services/geminiService';
@@ -113,6 +114,7 @@ const App: React.FC = () => {
                         isWorkspaceReady={!!workspace && !!workspace.knowledgeGraph}
                         selectedNode={selectedNode}
                         onClearSelectedNode={() => setSelectedNode(null)}
+                        sources={workspace?.sources || []}
                     />
                 </div>
             </div>
