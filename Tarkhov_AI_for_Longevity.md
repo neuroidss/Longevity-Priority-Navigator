@@ -1,99 +1,99 @@
-# Presentation: Искусственный интеллект поможет нам победить старение?
-## Андрей Тархов, Applied AI, Retro Biosciences
+# Presentation: Can Artificial Intelligence Help Us Defeat Aging?
+## Andrey Tarkhov, Applied AI, Retro Biosciences
 
 ---
 
-### Слайд 2: Задача борьбы со старением
-- **Задача**: Продлить жизнь человека в здоровом состоянии.
-- **Что нам для этого нужно?**
-  - Терапия, которая продлевает жизнь.
-  - Способ измерить, что она работает.
-- **Как мы узнаем, что мы преуспели?**
-  - Клиническое испытание покажет: получавшие нашу терапию живут дольше, чем получавшие плацебо.
+### Slide 2: The Challenge of Combating Aging
+- **Goal**: To extend human life in a healthy state.
+- **What do we need for this?**
+  - A therapy that extends life.
+  - A way to measure that it works.
+- **How will we know if we have succeeded?**
+  - A clinical trial will show: those who received our therapy live longer than those who received a placebo.
 
 ---
 
-### Слайд 3: “Легкий” способ продлить жизнь
-- Эксперименты Майкла Роуза по отбору на отложенное размножение привело к увеличению продолжительности жизни плодовых мушек.
-- (Графики, показывающие увеличение продолжительности жизни)
+### Slide 3: An "Easy" Way to Extend Life
+- Michael Rose's experiments on selection for delayed reproduction led to an increase in the lifespan of fruit flies.
+- (Graphs showing increased lifespan)
 
 ---
 
-### Слайд 4: Какие задачи в старении ИИ поможет решить?
-- **Разработка лекарств?** (siRNA, Small molecules, CRISPR, etc.)
-- **Трансляция исследований и модели старения?** (Дрожжи, Нематоды, Мухи, Клетки, Мыши, Люди)
-- **Биомаркеры?** (Дряхлость и клинические биомаркеры, Молекулярные часы, Функциональные анализы)
-- **Как они все связаны?**
+### Slide 4: What Challenges in Aging Can AI Help Solve?
+- **Drug Development?** (siRNA, Small molecules, CRISPR, etc.)
+- **Translation of Research and Aging Models?** (Yeast, Nematodes, Flies, Cells, Mice, Humans)
+- **Biomarkers?** (Frailty and clinical biomarkers, Molecular clocks, Functional assays)
+- **How are they all connected?**
 
 ---
 
-### Слайд 5: Проблема курицы и яйца в исследованиях старения
-- **Слабые интервенции** (Химические соединения, Антитела, Смена образа жизни) -> **Слабый эффект на продолжительность жизни** -> **Шумные биомаркеры** (Контроль, p<0.05?)
-- Эта триада создает основной барьер в исследованиях.
+### Slide 5: The Chicken-and-Egg Problem in Aging Research
+- **Weak Interventions** (Chemical compounds, Antibodies, Lifestyle changes) -> **Weak effect on lifespan** -> **Noisy Biomarkers** (Control, p<0.05?)
+- This triad creates the main barrier in research.
 
 ---
 
-### Слайд 6: Почему старение сложнее измерять, чем острые заболевания?
-- **Острые заболевания (Онкомаркер):**
-  - Отношение сигнала к шуму: SNR >> 1. Четкое различие между здоровой тканью и опухолью.
-- **Старение и хронические заболевания (Биомаркер старения):**
-  - Отношение сигнала к шуму: SNR << 1. Сигнал скрыт в шуме индивидуальных траекторий.
+### Slide 6: Why is Aging Harder to Measure Than Acute Diseases?
+- **Acute Diseases (Oncomarker):**
+  - Signal-to-noise ratio: SNR >> 1. Clear distinction between healthy tissue and a tumor.
+- **Aging and Chronic Diseases (Aging Biomarker):**
+  - Signal-to-noise ratio: SNR << 1. The signal is hidden in the noise of individual trajectories.
 
 ---
 
-### Слайд 7: Примеры проблемы курицы и яйца
-- **Сила интервенции** (Правильно выбранная мишень и эффективная терапия)
-- **Чувствительность биомаркера** (Предсказательная сила выбранных “часов старения” и их шум)
-- **Критичность для старения человека** (Теория старения, понимание механизма и его трансляция в человеке)
-- **Результат**: На сегодня почти ничего не доказано, что работает (GLP1, SGLT2 - первые кандидаты).
+### Slide 7: Examples of the Chicken-and-Egg Problem
+- **Intervention Strength** (A correctly chosen target and an effective therapy)
+- **Biomarker Sensitivity** (The predictive power of the chosen "aging clocks" and their noise)
+- **Criticality for Human Aging** (The theory of aging, understanding the mechanism, and its translation to humans)
+- **Result**: To date, almost nothing has been proven to work (GLP1, SGLT2 are the first candidates).
 
 ---
 
-### Слайд 8: 1. Полногеномный скрининг мишеней in vitro
-- **Сила интервенции:** Увеличиваем экспрессию каждого гена в пуле клеток с помощью CRISPRa или ORF.
-- **Чувствительность биомаркера:** Часы по scRNAseq - транскриптомам отдельных клеток. Очень шумные!
-- **Критичность для старения человека:** Непонятен механизм, и как эмулировать эффект в целом организме — и непонятна связь с продолжительностью жизни.
-- **Ссылки**: Plesa et al. (2023), Camillo et al. (2025), Huang et al. (2025)
+### Slide 8: 1. Full-Genome Screening of Targets In Vitro
+- **Intervention Strength:** We increase the expression of each gene in a pool of cells using CRISPRa or ORF.
+- **Biomarker Sensitivity:** Clocks based on scRNAseq - single-cell transcriptomes. Very noisy!
+- **Criticality for Human Aging:** The mechanism is unclear, as is how to emulate the effect in a whole organism—and the link to lifespan is not understood.
+- **References**: Plesa et al. (2023), Camillo et al. (2025), Huang et al. (2025)
 
 ---
 
-### Слайд 9: 2. Скрининг библиотек малых молекул in vitro
-- **Сила интервенции:** Скрининг 100,000 малых молекул в клеточных линиях, 9 из них продлили жизнь червям на ~10-50%.
-- **Чувствительность биомаркера:** Измеряем устойчивость клеточной линии к оксидативному стрессу (перекись водорода).
-- **Критичность для старения человека:** Непонятно сохранен ли механизм от червей (и клеточных линий) к людям, PK/PD, биодоступность. Из 32 кандидатов - 28 проблемные (PAINS, cell toxicity, DNA-damaging).
-- **Ссылки**: Zhang et al. (2020), Lombard et al. (2020)
+### Slide 9: 2. Screening of Small Molecule Libraries In Vitro
+- **Intervention Strength:** Screening of 100,000 small molecules in cell lines; 9 of them extended the lifespan of worms by ~10-50%.
+- **Biomarker Sensitivity:** We measure the resistance of a cell line to oxidative stress (hydrogen peroxide).
+- **Criticality for Human Aging:** It is unclear if the mechanism is conserved from worms (and cell lines) to humans, considering PK/PD, bioavailability. Out of 32 candidates, 28 are problematic (PAINS, cell toxicity, DNA-damaging).
+- **References**: Zhang et al. (2020), Lombard et al. (2020)
 
 ---
 
-### Слайд 10: 3. Атлас организма на одноклеточном уровне
-- **Сила интервенции:** Не тестировались (Tabula Muris).
-- **Чувствительность биомаркера:** scRNAseq — транскриптомы 100,000 отдельных клеток из 7 мышей и 20 тканей.
-- **Критичность для старения человека:** Непонятно сохранен ли механизм старения от мышей к людям, нет теории старения, непонятны мишени.
-- **Ссылки**: Tabula Muris, Tabula Sapiens, CZ CELLxGENE
+### Slide 10: 3. Single-Cell Atlas of the Organism
+- **Intervention Strength:** Not tested (Tabula Muris).
+- **Biomarker Sensitivity:** scRNAseq — transcriptomes of 100,000 individual cells from 7 mice and 20 tissues.
+- **Criticality for Human Aging:** It's unclear if the aging mechanism is conserved from mice to humans, there's no theory of aging, the targets are unknown.
+- **References**: Tabula Muris, Tabula Sapiens, CZ CELLxGENE
 
 ---
 
-### Слайд 11: 4. Скрининг лекарств от рака и виртуальные модели клетки
-- **Сила интервенции:** Все виды терапий, применяемых в лечении рака — малые молекулы, генетические интервенции и т.д.
-- **Чувствительность биомаркера:** RNAseq (транскриптомика), протеомика, выживаемость клеток, профилирование хроматина, etc. scRNAseq от Xaira (2025).
-- **Критичность для старения человека:** Вклад всех видов рака в среднюю продолжительность жизни — 3 года. Готовы ли мы принимать химиотерапию от старения?
-- **Ссылки**: clue.io, Xaira's: Huang et al. (2025)
+### Slide 11: 4. Screening of Cancer Drugs and Virtual Cell Models
+- **Intervention Strength:** All types of therapies used in cancer treatment—small molecules, genetic interventions, etc.
+- **Biomarker Sensitivity:** RNAseq (transcriptomics), proteomics, cell viability, chromatin profiling, etc. scRNAseq from Xaira (2025).
+- **Criticality for Human Aging:** The contribution of all types of cancer to average lifespan is ~3 years. Are we ready to take chemotherapy for aging?
+- **References**: clue.io, Xaira's: Huang et al. (2025)
 
 ---
 
-### Слайд 12: 5. Одобренные FDA лекарства, уже снижающие смертность от всех причин
-- **Сила интервенции:** Ингибиторы SGLT2 (дапаглифлозин), Агонисты GLP1 (оземпик).
-- **Чувствительность биомаркера:** Стандартные клинические маркеры заболеваний и смертность от всех причин.
-- **Критичность для старения человека:** Клинические испытания продолжаются, обнаружено снижение смертности от всех причин — первый сигнал того, что это могут быть первые одобренные лекарства от старения!
-- **Ссылки**: Jhund et al (2022), Huang et al (2024)
+### Slide 12: 5. FDA-Approved Drugs That Already Reduce All-Cause Mortality
+- **Intervention Strength:** SGLT2 inhibitors (dapagliflozin), GLP1 agonists (Ozempic).
+- **Biomarker Sensitivity:** Standard clinical markers of diseases and all-cause mortality.
+- **Criticality for Human Aging:** Clinical trials are ongoing, and a reduction in all-cause mortality has been observed—the first signal that these could be the first approved drugs for aging!
+- **References**: Jhund et al (2022), Huang et al (2024)
 
 ---
 
-### Слайд 13: Задачи, которые может/должен решать ИИ
-- поиск новых мишеней и разработка лекарств
-- построение биомаркеров старения
-- предсказание результатов клинических испытаний по молекулярным биомаркерам
-- предсказание эффектов интервенций на продолжительность жизни
-- построение моделей: QSAR, QSPR, AlphaFold, ESM, scGPT, GPT-4b micro..., моделей смертности, феноменологических моделей и т.д.
-- разработка инструментов, e.g. BLAST, NGS пайплайны, анализ изображений микроскопии и т.д.
-- ... и т.д.
+### Slide 13: Tasks That AI Can/Should Solve
+- Search for new targets and drug development
+- Construction of aging biomarkers
+- Prediction of clinical trial outcomes based on molecular biomarkers
+- Prediction of the effects of interventions on lifespan
+- Construction of models: QSAR, QSPR, AlphaFold, ESM, scGPT, GPT-4b micro..., mortality models, phenomenological models, etc.
+- Development of tools, e.g., BLAST, NGS pipelines, analysis of microscopy images, etc.
+- ... and so on.

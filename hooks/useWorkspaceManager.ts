@@ -1,7 +1,4 @@
 
-
-
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { type WorkspaceState, AgentType, type ChatMessage, type AgentResponse, type KnowledgeGraph, type KnowledgeGraphNode, type AnalysisLens } from '../types';
 import { dispatchAgent } from '../services/geminiService';
@@ -10,8 +7,8 @@ import { useAppSettings } from './useAppSettings';
 const FEATURED_ANALYSIS: WorkspaceState = {
     topic: "AI-driven longevity research prioritization",
     sources: [
-        { uri: '/Tarkhov_AI_for_Longevity.md', title: 'Presentation: Искусственный интеллект поможет нам победить старение? (Андрей Тархов)' },
-        { uri: '/Salimov_AI_System_for_Longevity.md', title: 'Presentation: Использование ИИ для ускорения исследований в области долголетия (Данил Салимов)' }
+        { uri: '/Tarkhov_AI_for_Longevity.md', title: 'Presentation: Can Artificial Intelligence Help Us Defeat Aging? (Andrey Tarkhov)' },
+        { uri: '/Salimov_AI_System_for_Longevity.md', title: 'Presentation: Using AI to Accelerate Longevity Research (Danil Salimov)' }
     ],
     knowledgeGraph: {
         nodes: [
@@ -114,6 +111,30 @@ const createWorkspaceState = (
     };
 };
 
+/**
+ * Sanitizes a workspace object loaded from localStorage to ensure it conforms to the
+ * current WorkspaceState interface, preventing crashes from outdated schemas.
+ */
+const sanitizeWorkspaceState = (loadedWorkspace: any): WorkspaceState | null => {
+    if (!loadedWorkspace || typeof loadedWorkspace !== 'object' || !loadedWorkspace.topic) {
+        return null;
+    }
+    
+    // Ensure all array properties exist and are arrays to prevent .length errors.
+    return {
+        topic: loadedWorkspace.topic,
+        sources: Array.isArray(loadedWorkspace.sources) ? loadedWorkspace.sources : [],
+        knowledgeGraph: loadedWorkspace.knowledgeGraph || null,
+        synthesis: loadedWorkspace.synthesis || null,
+        researchOpportunities: Array.isArray(loadedWorkspace.researchOpportunities) ? loadedWorkspace.researchOpportunities : [],
+        contradictions: Array.isArray(loadedWorkspace.contradictions) ? loadedWorkspace.contradictions : [],
+        synergies: Array.isArray(loadedWorkspace.synergies) ? loadedWorkspace.synergies : [],
+        keyQuestion: loadedWorkspace.keyQuestion || null,
+        trendAnalysis: loadedWorkspace.trendAnalysis || null,
+        timestamp: loadedWorkspace.timestamp || Date.now()
+    };
+};
+
 
 interface WorkspaceManagerProps {
     settings: ReturnType<typeof useAppSettings>;
@@ -130,37 +151,42 @@ export const useWorkspaceManager = ({ settings, addLog, storageKey }: WorkspaceM
     const [hasSearched, setHasSearched] = useState<boolean>(false);
 
     useEffect(() => {
+        const loadInitialState = () => {
+            addLog("No valid state found. Loading featured analysis showcase.");
+            const initialWorkspace = { ...FEATURED_ANALYSIS, timestamp: Date.now() };
+            setTopic(initialWorkspace.topic);
+            setWorkspace(initialWorkspace);
+            setHasSearched(true);
+            localStorage.setItem(storageKey, JSON.stringify({
+                topic: initialWorkspace.topic,
+                workspace: initialWorkspace,
+                hasSearched: true,
+                chatHistory: [],
+                model: settings.model
+            }));
+        };
+
         try {
             const savedStateJSON = localStorage.getItem(storageKey);
             if (savedStateJSON) {
                 const savedState = JSON.parse(savedStateJSON);
-                if (savedState.topic) setTopic(savedState.topic);
-                if (savedState.workspace) {
-                    setWorkspace(savedState.workspace);
+                const sanitizedWorkspace = sanitizeWorkspaceState(savedState.workspace);
+                
+                if (sanitizedWorkspace) {
+                    setTopic(sanitizedWorkspace.topic);
+                    setWorkspace(sanitizedWorkspace);
+                    setHasSearched(savedState.hasSearched || true);
+                    addLog("Successfully restored and validated workspace state from previous session.");
+                } else {
+                    throw new Error("Saved workspace state is invalid or outdated.");
                 }
-                if (savedState.hasSearched) setHasSearched(savedState.hasSearched);
-                addLog("Successfully restored workspace state from previous session.");
             } else {
-                // Load featured analysis if no state is saved
-                addLog("No saved state found. Loading featured analysis showcase.");
-                const initialWorkspace = { ...FEATURED_ANALYSIS, timestamp: Date.now() };
-                setTopic(initialWorkspace.topic);
-                setWorkspace(initialWorkspace);
-                setHasSearched(true);
-                // Also save this initial state so it persists on reload until a new search is made
-                localStorage.setItem(storageKey, JSON.stringify({
-                    topic: initialWorkspace.topic,
-                    workspace: initialWorkspace,
-                    hasSearched: true,
-                    chatHistory: [],
-                    model: settings.model
-                }));
+                loadInitialState();
             }
         } catch (e) {
-            addLog(`Failed to load workspace state from localStorage: ${e instanceof Error ? e.message : String(e)}.`);
-            // Fallback to empty in case of parsing error
-            setWorkspace(null);
-            setHasSearched(false);
+            addLog(`WARN: Loading from localStorage failed (${e instanceof Error ? e.message : 'Unknown error'}). Clearing old data and loading fresh state.`);
+            localStorage.removeItem(storageKey);
+            loadInitialState();
         }
     }, [addLog, storageKey, settings.model]);
 
