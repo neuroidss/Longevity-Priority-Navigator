@@ -83,7 +83,8 @@ const AgentControlPanel: React.FC<AgentControlPanelProps> = ({
       </div>
 
       {/* Action Buttons */}
-       <div className="space-y-4 pt-4 border-t border-slate-700/50">
+       <div className="space-y-4 pt-6 border-t border-slate-700/50">
+          <h3 className="text-center text-sm font-semibold text-slate-400 uppercase tracking-wider -mt-2 mb-2">Dispatch Agents</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <button
                 onClick={() => onDispatchAgent(selectedLens, AgentType.KnowledgeNavigator)}

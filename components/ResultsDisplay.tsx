@@ -68,32 +68,46 @@ const TrendAnalysisCard: React.FC<{ analysis: TrendAnalysis }> = ({ analysis }) 
 
             {/* Additional Concepts */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-6 border-t border-slate-700/50">
-                {analysis.emergingConcepts?.length > 0 && (
-                    <div className="space-y-3">
-                        <h3 className="text-lg font-bold text-slate-100 flex items-center gap-2">
-                            <ArrowTrendingUpIcon className="text-green-400" />
-                            Other Emerging Concepts
-                        </h3>
-                        {analysis.emergingConcepts.map((item, index) => (
-                             <div key={index} className="bg-slate-800/40 p-3 rounded-md border-l-2 border-green-600">
-                                <p className="font-semibold text-green-300">{item.concept}</p>
-                                <p className="text-xs text-slate-400 mt-1">{item.justification}</p>
+                {analysis.fadingConcepts?.length > 0 && (
+                     <div className="bg-red-900/30 p-4 rounded-lg border-t-2 border-red-500/80 space-y-4">
+                        <div className="flex items-start gap-3">
+                            <div className="bg-red-500/10 p-2 rounded-full flex-shrink-0">
+                                <ArrowTrendingDownIcon className="h-6 w-6 text-red-400" />
                             </div>
-                        ))}
+                            <div>
+                                <h3 className="text-xl font-bold text-red-300">Fading Focus</h3>
+                                <p className="text-xs text-slate-400 mt-1">These concepts are becoming less central as the field evolves.</p>
+                            </div>
+                        </div>
+                        <div className="space-y-4">
+                            {analysis.fadingConcepts.map((item, index) => (
+                                 <div key={index} className="pl-3 border-l-2 border-red-500/50">
+                                    <p className="font-semibold text-slate-200">{item.concept}</p>
+                                    <p className="text-sm text-slate-400 mt-1">{item.justification}</p>
+                                </div>
+                            ))}
+                        </div>
                     </div>
                 )}
-                {analysis.fadingConcepts?.length > 0 && (
-                    <div className="space-y-3">
-                        <h3 className="text-lg font-bold text-slate-100 flex items-center gap-2">
-                            <ArrowTrendingDownIcon className="text-red-400" />
-                            De-emphasized/Solved Concepts
-                        </h3>
-                         {analysis.fadingConcepts.map((item, index) => (
-                             <div key={index} className="bg-slate-800/40 p-3 rounded-md border-l-2 border-red-600">
-                                <p className="font-semibold text-red-300">{item.concept}</p>
-                                <p className="text-xs text-slate-400 mt-1">{item.justification}</p>
+                {analysis.emergingConcepts?.length > 0 && (
+                    <div className="bg-green-900/30 p-4 rounded-lg border-t-2 border-green-500/80 space-y-4">
+                        <div className="flex items-start gap-3">
+                            <div className="bg-green-500/10 p-2 rounded-full flex-shrink-0">
+                                 <ArrowTrendingUpIcon className="h-6 w-6 text-green-400" />
                             </div>
-                        ))}
+                            <div>
+                                <h3 className="text-xl font-bold text-green-300">Gaining Momentum</h3>
+                                <p className="text-xs text-slate-400 mt-1">These concepts are becoming more central to the research discussion.</p>
+                            </div>
+                        </div>
+                        <div className="space-y-4">
+                            {analysis.emergingConcepts.map((item, index) => (
+                                 <div key={index} className="pl-3 border-l-2 border-green-500/50">
+                                    <p className="font-semibold text-slate-200">{item.concept}</p>
+                                    <p className="text-sm text-slate-400 mt-1">{item.justification}</p>
+                                </div>
+                            ))}
+                        </div>
                     </div>
                 )}
             </div>
@@ -139,9 +153,9 @@ const WorkspaceItemCard: React.FC<{ item: WorkspaceItem }> = ({ item }) => {
 
 const MaturityTag: React.FC<{ maturity: ResearchOpportunity['maturity'] }> = ({ maturity }) => {
     const maturityStyles = {
-        'Basic Research': { icon: <BeakerIcon />, text: 'Basic Research', color: 'text-blue-300', bg: 'bg-blue-900/50' },
-        'Translational': { icon: <ArrowsRightLeftIcon />, text: 'Translational', color: 'text-green-300', bg: 'bg-green-900/50' },
-        'Clinical': { icon: <BuildingLibraryIcon />, text: 'Clinical', color: 'text-amber-300', bg: 'bg-amber-900/50' },
+        'Basic Research': { icon: <BeakerIcon className="h-4 w-4" />, text: 'Basic Research', color: 'text-blue-300', bg: 'bg-blue-900/50' },
+        'Translational': { icon: <ArrowsRightLeftIcon className="h-4 w-4" />, text: 'Translational', color: 'text-green-300', bg: 'bg-green-900/50' },
+        'Clinical': { icon: <BuildingLibraryIcon className="h-4 w-4" />, text: 'Clinical', color: 'text-amber-300', bg: 'bg-amber-900/50' },
     };
     const style = maturityStyles[maturity] || maturityStyles['Basic Research'];
     return (
@@ -162,14 +176,17 @@ const ConfidenceMeter: React.FC<{ confidence: number }> = ({ confidence }) => {
 
     return (
         <div>
-            <div className="flex items-center gap-2 text-xs font-semibold text-slate-300 mb-1">
-                <ShieldCheckIcon className="h-4 w-4" />
-                <span>AI Confidence</span>
+            <div className="flex justify-between items-center text-xs font-semibold text-slate-300 mb-1">
+                <div className="flex items-center gap-2">
+                    <ShieldCheckIcon className="h-4 w-4" />
+                    <span>AI Confidence</span>
+                </div>
                 <span className="font-bold text-white">{percentage}%</span>
             </div>
             <div className="w-full bg-slate-700 rounded-full h-1.5">
                 <div className={`${getConfidenceColor(confidence)} h-1.5 rounded-full`} style={{ width: `${percentage}%` }}></div>
             </div>
+            <p className="text-xs text-slate-500 mt-1">Reflects source consensus & data quality.</p>
         </div>
     );
 };
@@ -193,18 +210,18 @@ const ResearchOpportunityCard: React.FC<{
                     <h3 className="text-xl font-bold text-slate-100">{opportunity.title}</h3>
                     <p className="text-slate-300 leading-relaxed text-sm">{opportunity.justification}</p>
                     
-                    <div className="pt-4 border-t border-slate-700 grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
-                        <div>
-                            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Maturity</p>
-                            <MaturityTag maturity={opportunity.maturity} />
+                    <div className="pt-4 border-t border-slate-700 space-y-4">
+                        <div className="flex flex-wrap items-start gap-x-6 gap-y-3 text-sm">
+                            <div>
+                                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Maturity</p>
+                                <MaturityTag maturity={opportunity.maturity} />
+                            </div>
+                            <div>
+                                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Potential Impact</p>
+                                <p className="text-slate-300 font-medium">{opportunity.potentialImpact}</p>
+                            </div>
                         </div>
-                         <div>
-                            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Potential Impact</p>
-                            <p className="text-sm text-slate-300 font-medium">{opportunity.potentialImpact}</p>
-                        </div>
-                        <div className="md:col-span-2">
-                             <ConfidenceMeter confidence={opportunity.confidence} />
-                        </div>
+                        <ConfidenceMeter confidence={opportunity.confidence} />
                     </div>
                 </div>
             </div>
