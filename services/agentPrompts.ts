@@ -25,26 +25,24 @@ export const buildRelevanceFilterPrompt = (
         `<ARTICLE ${i + 1}>\n<URL>${item.link}</URL>\n<TITLE>${item.title}</TITLE>\n<SNIPPET>${item.snippet}</SNIPPET>\n</ARTICLE>`
     ).join('\n\n');
 
-    const userPrompt = `I am researching the topic "${query}". From the following list of search results, please identify which ones are directly relevant to my topic.\n\n${context}`;
+    const userPrompt = `I am researching the topic "${query}". From the following list of search results, please identify which ones are relevant to my topic.\n\n${context}`;
 
-    const systemInstruction = `You are a highly skilled research assistant. Your task is to act as a relevance filter. You will be given a user's research topic and a list of search results (titles and snippets).
-- You must evaluate each article to determine if it is **directly relevant** to the user's query.
-- Your output MUST be a single, valid JSON object enclosed in a markdown code block (\`\`\`json ... \`\`\`).
+    const systemInstruction = `You are a helpful research assistant. Your task is to act as a relevance filter.
+You will be given a user's research topic and a list of search results.
+- Your goal is to identify which search results are **relevant**. A result is relevant if its title or snippet discusses the research topic.
+- Your output MUST be a single, valid JSON object. Do not use markdown code blocks.
 - The JSON object must contain a single key, "relevantArticleUrls", which is an array of strings.
 - Each string in the array must be the exact URL of a relevant article from the provided list.
 - If no articles are relevant, return an empty array: { "relevantArticleUrls": [] }.
-- Be strict. Do not include articles that are only tangentially related.
-- Do not add any explanation or text outside the JSON block.
+- Do not add any explanation or text outside the JSON object.
 
 Example response:
-\`\`\`json
 {
   "relevantArticleUrls": [
     "https://www.example.com/article1",
     "https://www.example.com/article2"
   ]
-}
-\`\`\``;
+}`;
     return { systemInstruction, userPrompt };
 };
 

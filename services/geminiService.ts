@@ -230,6 +230,7 @@ export class ApiClient {
             let relevantResults: SearchResult[];
             try {
                 const responseText = await this.callOllamaAPI(model.id, systemInstruction, userPrompt, true);
+                this.addLog(`[Ollama] Raw relevance filter response: ${responseText}`);
                 const jsonText = parseJsonFromText(responseText, this.addLog);
                 const parsed = JSON.parse(jsonText);
                 const relevantUrls = new Set(parsed.relevantArticleUrls as string[]);

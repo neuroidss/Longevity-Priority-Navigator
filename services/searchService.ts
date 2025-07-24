@@ -107,8 +107,15 @@ export const performGoogleSearch = async (
             })
             .filter((r): r is SearchResult => r !== null);
 
-        addLog(`[performGoogleSearch] Found ${searchResults.length} sources from Google Search grounding.`);
+        addLog(`[performGoogleSearch] Found ${searchResults.length} raw sources from Google Search grounding.`);
         const uniqueResults = Array.from(new Map(searchResults.map(item => [item.link, item])).values());
+
+        const GOOGLE_SEARCH_LIMIT = 20;
+        if (uniqueResults.length > GOOGLE_SEARCH_LIMIT) {
+            addLog(`[performGoogleSearch] Limiting Google Search results from ${uniqueResults.length} to ${GOOGLE_SEARCH_LIMIT}.`);
+            return uniqueResults.slice(0, GOOGLE_SEARCH_LIMIT);
+        }
+        
         return uniqueResults;
 
     } catch (e) {
