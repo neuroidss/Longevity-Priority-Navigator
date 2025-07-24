@@ -1,4 +1,5 @@
 
+
 import { GoogleGenAI } from "@google/genai";
 import { 
     type AgentResponse, type GroundingSource, 
@@ -6,7 +7,7 @@ import {
     SearchDataSource, type SearchResult, ContradictionTolerance, ModelProvider
 } from '../types';
 import { buildAgentPrompts, buildChatPrompt, buildDiscoverAndValidatePrompt, buildFilterBioRxivFeedPrompt, buildRelevanceFilterPrompt } from './agentPrompts';
-import { performFederatedSearch, isPrimarySourceDomain, performGoogleSearch, excavatePrimarySources, enrichPrimarySources } from './searchService';
+import { performFederatedSearch, isPrimarySourceDomain, performGoogleSearch, enrichPrimarySources } from './searchService';
 
 const MAX_SOURCES_FOR_ANALYSIS = 40; // A safer limit to avoid context overflows
 
@@ -214,7 +215,7 @@ export class ApiClient {
         this.addLog(`[discoverAndValidateSources] Starting with enabled sources: ${enabledSources.join(', ')}`);
 
         if (model.provider === ModelProvider.Ollama) {
-            setLoadingMessage("Step 1/4: Searching for context...");
+            setLoadingMessage("Step 1/3: Searching for context...");
             this.addLog('[discoverAndValidateSources] Ollama model detected. Performing federated search.');
             const searchResults = await performFederatedSearch(query, enabledSources, this.addLog);
             const uniqueSearchResults = Array.from(new Map(searchResults.map(item => [item.link, item])).values());
@@ -231,7 +232,7 @@ export class ApiClient {
                 this.addLog(`[discoverAndValidateSources] Limiting sources for Ollama filtering from ${uniqueSearchResults.length} to ${MAX_SOURCES_FOR_ANALYSIS}.`);
             }
 
-            setLoadingMessage("Step 2/4: Filtering relevant sources...");
+            setLoadingMessage("Step 2/3: Filtering relevant sources...");
             this.addLog(`[discoverAndValidateSources] Asking Ollama to filter ${resultsToFilter.length} results for relevance.`);
             const { systemInstruction, userPrompt } = buildRelevanceFilterPrompt(query, resultsToFilter);
             
@@ -267,33 +268,20 @@ export class ApiClient {
             if (relevantResults.length === 0) {
               throw new Error("Ollama model filtered out all search results as irrelevant.");
             }
-
-            setLoadingMessage("Step 3/4: Excavating primary sources...");
             
-            const initialPrimaryResults = relevantResults.filter(res => isPrimarySourceDomain(res.link));
-            const secondaryResults = relevantResults.filter(res => !isPrimarySourceDomain(res.link));
-            
-            this.addLog(`[discoverAndValidateSources] OLLAMA Path: Found ${initialPrimaryResults.length} initial primary sources and ${secondaryResults.length} secondary sources for excavation.`);
-
-            let excavatedPrimaryResults: SearchResult[] = [];
-            if (secondaryResults.length > 0) {
-                excavatedPrimaryResults = await excavatePrimarySources(secondaryResults, this.addLog);
-            }
-
-            const allPrimaryResults = [...initialPrimaryResults, ...excavatedPrimaryResults];
-            const finalPrimaryResults = Array.from(new Map(allPrimaryResults.map(item => [item.link, item])).values());
-            
-            this.addLog(`[discoverAndValidateSources] OLLAMA Path: Combined initial and excavated sources. Total unique primary sources: ${finalPrimaryResults.length}.`);
+            this.addLog(`[discoverAndValidateSources] OLLAMA Path: Filtering for primary scientific domains...`);
+            const finalPrimaryResults = relevantResults.filter(res => isPrimarySourceDomain(res.link));
+            this.addLog(`[discoverAndValidateSources] OLLAMA Path: Identified ${finalPrimaryResults.length} potential primary sources.`);
 
             if (finalPrimaryResults.length === 0) {
-                throw new Error("Could not find any primary scientific sources for the topic after filtering and excavation.");
+                throw new Error("Could not find any primary scientific sources for the topic after AI filtering.");
             }
             
-            setLoadingMessage("Step 4/4: Enriching primary sources...");
+            setLoadingMessage("Step 3/3: Enriching primary sources...");
             const enrichedPrimaryResults = await enrichPrimarySources(finalPrimaryResults, this.addLog);
 
             if (enrichedPrimaryResults.length === 0) {
-                throw new Error("Could not find or enrich any primary scientific sources for the topic after filtering and excavation.");
+                throw new Error("Could not find or enrich any primary scientific sources for the topic after filtering.");
             }
 
             const limitedResults = enrichedPrimaryResults.slice(0, MAX_SOURCES_FOR_ANALYSIS);
@@ -316,7 +304,7 @@ export class ApiClient {
         }
 
         // --- Google AI Path ---
-        setLoadingMessage("Step 1/4: Searching databases & web...");
+        setLoadingMessage("Step 1/3: Searching databases & web...");
         
         const specialistSearchSources = enabledSources.filter(s => s !== SearchDataSource.GoogleSearch);
         const useGoogleSearch = enabledSources.includes(SearchDataSource.GoogleSearch);
@@ -354,41 +342,41 @@ export class ApiClient {
             allSearchResults.push(...filteredFeedResults);
         }
 
-        const uniqueSearchResults = Array.from(new Map(allSearchResults.map(item => [item.link, item])).values());
-        this.addLog(`[discoverAndValidateSources] Found ${uniqueSearchResults.length} total unique potential sources.`);
+        // Deterministic de-duplication that prioritizes GoogleSearch as the origin for any link.
+        // This ensures data provenance is accurately reflected if Google finds a link also found by another source.
+        const uniqueSearchResultsMap = new Map<string, SearchResult>();
+        for (const item of allSearchResults) {
+            const existing = uniqueSearchResultsMap.get(item.link);
+            // If no entry exists, add it.
+            // If an entry exists, but the new one is from Google Search, overwrite it.
+            // This ensures Google Search is the final attributed source.
+            if (!existing || item.source === SearchDataSource.GoogleSearch) {
+                uniqueSearchResultsMap.set(item.link, item);
+            }
+        }
+        const uniqueSearchResults = Array.from(uniqueSearchResultsMap.values());
+        
+        this.addLog(`[discoverAndValidateSources] Found ${uniqueSearchResults.length} total unique potential sources after de-duplication.`);
 
         if (uniqueSearchResults.length === 0) {
             this.addLog("[discoverAndValidateSources] All searches returned no results.");
             return [];
         }
         
-        setLoadingMessage("Step 2/4: Excavating primary sources...");
-
-        const initialPrimaryResults = uniqueSearchResults.filter(res => isPrimarySourceDomain(res.link));
-        const secondaryResults = uniqueSearchResults.filter(res => !isPrimarySourceDomain(res.link));
-        
-        this.addLog(`[discoverAndValidateSources] Found ${initialPrimaryResults.length} initial primary sources and ${secondaryResults.length} secondary sources for excavation.`);
-        
-        let excavatedPrimaryResults: SearchResult[] = [];
-        if (secondaryResults.length > 0) {
-            excavatedPrimaryResults = await excavatePrimarySources(secondaryResults, this.addLog);
-        }
-
-        const allPrimaryResults = [...initialPrimaryResults, ...excavatedPrimaryResults];
-        const finalPrimaryResults = Array.from(new Map(allPrimaryResults.map(item => [item.link, item])).values());
-        
-        this.addLog(`[discoverAndValidateSources] Combined initial and excavated sources. Total unique primary sources: ${finalPrimaryResults.length}.`);
+        this.addLog(`[discoverAndValidateSources] Filtering for primary scientific domains...`);
+        const finalPrimaryResults = uniqueSearchResults.filter(res => isPrimarySourceDomain(res.link));
+        this.addLog(`[discoverAndValidateSources] Identified ${finalPrimaryResults.length} potential primary sources from search results.`);
 
         if (finalPrimaryResults.length === 0) {
-            this.addLog("[discoverAndValidateSources] No primary sources found after enrichment and excavation.");
-            throw new Error("Could not find any primary scientific sources for the topic after filtering and excavation.");
+            this.addLog("[discoverAndValidateSources] No primary sources found after filtering for known scientific domains.");
+            throw new Error("Could not find any primary scientific sources for the topic from the enabled search providers.");
         }
         
-        setLoadingMessage("Step 3/4: Enriching primary source content...");
+        setLoadingMessage("Step 2/3: Enriching primary source content...");
         const enrichedPrimaryResults = await enrichPrimarySources(finalPrimaryResults, this.addLog);
-        this.addLog(`[discoverAndValidateSources] Total primary sources for assessment: ${enrichedPrimaryResults.length}.`);
+        this.addLog(`[discoverAndValidateSources] Finished enriching sources. Total primary sources for assessment: ${enrichedPrimaryResults.length}.`);
 
-        setLoadingMessage("Step 4/4: AI assessing source reliability...");
+        setLoadingMessage("Step 3/3: AI assessing source reliability...");
         this.addLog(`[discoverAndValidateSources] Sending ${enrichedPrimaryResults.length} curated primary sources to AI for assessment.`);
         const { systemInstruction, userPrompt } = buildDiscoverAndValidatePrompt(query, enrichedPrimaryResults);
 

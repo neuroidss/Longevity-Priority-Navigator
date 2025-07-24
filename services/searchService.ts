@@ -1,4 +1,5 @@
 
+
 import { SearchDataSource, type SearchResult, type GeneSearchedRecord, type OpenGeneSearchResponse } from '../types';
 import { GenerateContentResponse } from "@google/genai";
 
@@ -431,67 +432,6 @@ export const performFederatedSearch = async (
     return uniqueResults;
 };
 
-
-export const excavatePrimarySources = async (secondarySources: SearchResult[], addLog: (message: string) => void): Promise<SearchResult[]> => {
-    addLog(`[Excavator] Starting excavation of ${secondarySources.length} secondary sources for DOIs.`);
-
-    const excavationPromises = secondarySources.map(async (source) => {
-        try {
-            if (isPrimarySourceDomain(source.link)) return null;
-
-            addLog(`[Excavator] Fetching: ${source.link}`);
-            const response = await fetchWithCorsFallback(source.link, addLog);
-            const html = await response.text();
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(html, 'text/html');
-            
-            // --- Strategy 1: Find a direct DOI link ---
-            const links = doc.querySelectorAll<HTMLAnchorElement>('a[href]');
-            for (const link of Array.from(links)) {
-                const href = link.href;
-                const hasDoi = href && (href.includes('doi.org') || /\/10\.\d{4,}/.test(href));
-
-                if (href && hasDoi && isPrimarySourceDomain(href)) {
-                    addLog(`[Excavator] Found linked DOI: ${href} from source: ${source.title}`);
-                    return {
-                        title: link.textContent?.trim() || href,
-                        link: href,
-                        snippet: `Excavated via linked DOI from secondary source: ${source.title}`,
-                        source: source.source,
-                    };
-                }
-            }
-
-            // --- Strategy 2: Find a DOI string in the text ---
-            const textContent = doc.body.textContent || '';
-            const doiRegex = /(10\.\d{4,9}\/[-._;()/:A-Z0-9]+)/i;
-            const match = textContent.match(doiRegex);
-
-            if (match && match[1]) {
-                const doi = match[1].replace(/[.,;]$/, ''); // Clean trailing punctuation
-                const doiUrl = `https://doi.org/${doi}`;
-                addLog(`[Excavator] Found DOI string in text: ${doi}. Constructing URL: ${doiUrl} from source: ${source.title}`);
-                return {
-                    title: `DOI: ${doi}`, // A more informative title
-                    link: doiUrl,
-                    snippet: `Excavated via text DOI from secondary source: ${source.title}`,
-                    source: source.source,
-                };
-            }
-
-            addLog(`[Excavator] No DOI found on: ${source.title}.`);
-            return null;
-        } catch (error) {
-            addLog(`[Excavator] WARN: Failed to process ${source.link}: ${error}`);
-            return null;
-        }
-    });
-
-    const results = (await Promise.all(excavationPromises)).filter((r): r is SearchResult => r !== null);
-    const uniqueExcavated = Array.from(new Map(results.map(item => [item.link, item])).values());
-    addLog(`[Excavator] Finished excavation. Found ${uniqueExcavated.length} unique primary sources via DOI from ${secondarySources.length} secondary sources.`);
-    return uniqueExcavated;
-};
 
 // --- Source Content Enrichment ---
 
