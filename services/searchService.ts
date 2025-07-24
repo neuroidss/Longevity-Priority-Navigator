@@ -16,15 +16,17 @@ const PRIMARY_SOURCE_DOMAINS = [
     'biorxiv.org', 'medrxiv.org', 'arxiv.org',
     'patents.google.com', 'uspto.gov',
     'nature.com', 'science.org', 'cell.com',
+    'jci.org', 'rupress.org',
     'jamanetwork.com', 'bmj.com', 'thelancet.com',
     'nejm.org', 'pnas.org', 'frontiersin.org',
-    'plos.org', 'mdpi.com', 'acs.org'
+    'plos.org', 'mdpi.com', 'acs.org', 'springer.com',
+    'wiley.com', 'elifesciences.org'
 ];
 
 export const isPrimarySourceDomain = (url: string): boolean => {
     try {
-        const hostname = new URL(url).hostname;
-        return PRIMARY_SOURCE_DOMAINS.some(domain => hostname.endsWith(domain));
+        const hostname = new URL(url).hostname.replace(/^www\./, '');
+        return PRIMARY_SOURCE_DOMAINS.some(domain => hostname === domain || hostname.endsWith(`.${domain}`));
     } catch (e) {
         return false;
     }
@@ -96,12 +98,17 @@ export const performGoogleSearch = async (
         const searchResults: SearchResult[] = groundingChunks
             .map((chunk: any) => {
                 if (chunk.web && chunk.web.uri) { // Title is now optional, will be enriched later
-                    return {
-                        link: chunk.web.uri,
-                        title: chunk.web.title || new URL(chunk.web.uri).hostname, // Use hostname as fallback title
-                        snippet: `Source from Google Search for: "${query}".`, 
-                        source: SearchDataSource.GoogleSearch
-                    };
+                    try {
+                        return {
+                            link: chunk.web.uri,
+                            title: chunk.web.title || new URL(chunk.web.uri).hostname, // Use hostname as fallback title
+                            snippet: `Source from Google Search for: "${query}".`, 
+                            source: SearchDataSource.GoogleSearch
+                        };
+                    } catch (e) {
+                         addLog(`[performGoogleSearch] WARN: Invalid URL found in grounding chunk: ${chunk.web.uri}`);
+                         return null;
+                    }
                 }
                 return null;
             })
@@ -426,99 +433,204 @@ export const performFederatedSearch = async (
 
 
 export const excavatePrimarySources = async (secondarySources: SearchResult[], addLog: (message: string) => void): Promise<SearchResult[]> => {
-    addLog(`[Excavator] Starting excavation of ${secondarySources.length} secondary sources.`);
-    const excavatedLinks: SearchResult[] = [];
+    addLog(`[Excavator] Starting excavation of ${secondarySources.length} secondary sources for DOIs.`);
 
-    const fetchAndParse = async (source: SearchResult) => {
+    const excavationPromises = secondarySources.map(async (source) => {
         try {
+            if (isPrimarySourceDomain(source.link)) return null;
+
             addLog(`[Excavator] Fetching: ${source.link}`);
             const response = await fetchWithCorsFallback(source.link, addLog);
             const html = await response.text();
             const parser = new DOMParser();
             const doc = parser.parseFromString(html, 'text/html');
-            const links = doc.querySelectorAll('a');
             
-            links.forEach(link => {
+            // --- Strategy 1: Find a direct DOI link ---
+            const links = doc.querySelectorAll<HTMLAnchorElement>('a[href]');
+            for (const link of Array.from(links)) {
                 const href = link.href;
-                if (isPrimarySourceDomain(href)) {
-                    excavatedLinks.push({
+                const hasDoi = href && (href.includes('doi.org') || /\/10\.\d{4,}/.test(href));
+
+                if (href && hasDoi && isPrimarySourceDomain(href)) {
+                    addLog(`[Excavator] Found linked DOI: ${href} from source: ${source.title}`);
+                    return {
                         title: link.textContent?.trim() || href,
                         link: href,
-                        snippet: `Excavated from: ${source.title}`,
+                        snippet: `Excavated via linked DOI from secondary source: ${source.title}`,
                         source: source.source,
-                    });
+                    };
                 }
-            });
-        } catch (error) {
-            addLog(`[Excavator] Failed to process ${source.link}: ${error}`);
-        }
-    };
+            }
 
-    await Promise.all(secondarySources.map(fetchAndParse));
-    
-    const uniqueExcavated = Array.from(new Map(excavatedLinks.map(item => [item.link, item])).values());
-    addLog(`[Excavator] Finished excavation. Found ${uniqueExcavated.length} unique primary links.`);
+            // --- Strategy 2: Find a DOI string in the text ---
+            const textContent = doc.body.textContent || '';
+            const doiRegex = /(10\.\d{4,9}\/[-._;()/:A-Z0-9]+)/i;
+            const match = textContent.match(doiRegex);
+
+            if (match && match[1]) {
+                const doi = match[1].replace(/[.,;]$/, ''); // Clean trailing punctuation
+                const doiUrl = `https://doi.org/${doi}`;
+                addLog(`[Excavator] Found DOI string in text: ${doi}. Constructing URL: ${doiUrl} from source: ${source.title}`);
+                return {
+                    title: `DOI: ${doi}`, // A more informative title
+                    link: doiUrl,
+                    snippet: `Excavated via text DOI from secondary source: ${source.title}`,
+                    source: source.source,
+                };
+            }
+
+            addLog(`[Excavator] No DOI found on: ${source.title}.`);
+            return null;
+        } catch (error) {
+            addLog(`[Excavator] WARN: Failed to process ${source.link}: ${error}`);
+            return null;
+        }
+    });
+
+    const results = (await Promise.all(excavationPromises)).filter((r): r is SearchResult => r !== null);
+    const uniqueExcavated = Array.from(new Map(results.map(item => [item.link, item])).values());
+    addLog(`[Excavator] Finished excavation. Found ${uniqueExcavated.length} unique primary sources via DOI from ${secondarySources.length} secondary sources.`);
     return uniqueExcavated;
 };
 
-const enrichPubMedResult = async (result: SearchResult, addLog: (msg: string) => void): Promise<SearchResult> => {
-    const pmidMatch = result.link.match(/pubmed\.ncbi\.nlm\.nih\.gov\/(\d+)/);
-    if (!pmidMatch || !pmidMatch[1]) {
-        return result; // Not a standard PubMed link
-    }
-    const pmid = pmidMatch[1];
-    addLog(`[Enricher.PubMed] Found PMID ${pmid}. Fetching details...`);
-    
-    try {
-        const summaryUrl = `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&id=${pmid}&retmode=json`;
-        const summaryResponse = await fetch(summaryUrl); // Direct fetch is usually fine for NCBI API
-        if (!summaryResponse.ok) {
-            throw new Error(`NCBI API summary failed with status ${summaryResponse.status}`);
-        }
-        const summaryData = await summaryResponse.json();
-        const article = summaryData.result[pmid];
+// --- Source Content Enrichment ---
 
-        if (article) {
-            const newTitle = article.title || result.title;
-            const newSnippet = `Authors: ${article.authors.map((a: {name: string}) => a.name).join(', ')}. Journal: ${article.source}. PubDate: ${article.pubdate}.`;
-            
-            addLog(`[Enricher.PubMed] Successfully enriched PMID ${pmid} with title: "${newTitle}"`);
-            return {
-                ...result,
-                title: newTitle,
-                snippet: newSnippet,
-            };
+const getContent = (doc: Document, selectors: string[], attribute: string = 'content'): string | null => {
+    for (const selector of selectors) {
+        const element = doc.querySelector<HTMLMetaElement | HTMLElement>(selector);
+        if (element) {
+            let content: string | null | undefined = null;
+            if (attribute === 'textContent') {
+                content = element.textContent;
+            } else if ('getAttribute' in element && typeof element.getAttribute === 'function') {
+                content = element.getAttribute(attribute);
+            }
+            if (content) return content.trim();
         }
-        return result;
+    }
+    return null;
+};
+
+export const enrichPrimarySource = async (source: SearchResult, addLog: (message: string) => void): Promise<SearchResult> => {
+    if (source.snippet && !source.snippet.startsWith('Source from Google Search') && !source.snippet.startsWith('Excavated via') && !source.snippet.startsWith('Fetch failed')) {
+        addLog(`[Enricher] Skipping enrichment for ${source.link} as it has a detailed snippet.`);
+        return source;
+    }
+
+    addLog(`[Enricher] Enriching: ${source.link}`);
+    try {
+        const response = await fetchWithCorsFallback(source.link, addLog);
+        const html = await response.text();
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+
+        let title: string | null = null;
+        let abstract: string | null = null;
+        let doiFound = false;
+
+        // Strategy 1: JSON-LD
+        try {
+            const jsonLdElement = doc.querySelector('script[type="application/ld+json"]');
+            if (jsonLdElement && jsonLdElement.textContent) {
+                const jsonLdData = JSON.parse(jsonLdElement.textContent);
+                const articles = Array.isArray(jsonLdData) ? jsonLdData : [jsonLdData];
+                const scholarlyArticle = articles.find(item => item && (item['@type'] === 'ScholarlyArticle' || (Array.isArray(item['@type']) && item['@type'].includes('ScholarlyArticle'))));
+                if (scholarlyArticle) {
+                    title = scholarlyArticle.headline || scholarlyArticle.name || null;
+                    abstract = scholarlyArticle.description || scholarlyArticle.abstract || null;
+                    if(scholarlyArticle.doi) doiFound = true;
+                    if (title && abstract) {
+                         addLog(`[Enricher] Found title and abstract via JSON-LD for ${source.link}`);
+                    }
+                }
+            }
+        } catch (e) {
+            addLog(`[Enricher] WARN: Could not parse JSON-LD from ${source.link}. Error: ${e}`);
+        }
+
+        // Strategy 2: Meta Tags
+        if (!title) {
+            title = getContent(doc, ['meta[property="og:title"]', 'meta[name="twitter:title"]'], 'content');
+             if (!title) title = doc.querySelector('title')?.textContent || null;
+        }
+        if (!abstract) {
+            abstract = getContent(doc, [
+                'meta[name="citation_abstract"]',
+                'meta[property="og:description"]',
+                'meta[name="twitter:description"]',
+                'meta[name="description"]'
+            ], 'content');
+        }
+        // Look for DOI in meta tags if not already found
+        if (!doiFound) {
+            const doiMeta = getContent(doc, ['meta[name="citation_doi"]', 'meta[name="DC.identifier"]'], 'content');
+            if (doiMeta && doiMeta.startsWith('10.')) {
+                doiFound = true;
+                addLog(`[Enricher] Found DOI in meta tag for ${source.link}`);
+            }
+        }
+
+        // Strategy 3: Body Selectors
+        if (!title) {
+            title = getContent(doc, ['h1'], 'textContent');
+        }
+        if (!abstract) {
+            abstract = getContent(doc, [
+                'div[class*="abstract"]', 
+                'section[id*="abstract"]',
+                '.abstract-content',
+                '#abstract',
+                'p.abstract'
+            ], 'textContent');
+        }
+        
+        // Strategy 4: Find DOI string in the text if still not found
+        if (!doiFound && doc.body?.textContent) {
+             const doiRegex = /(10\.\d{4,9}\/[-._;()/:A-Z0-9]+)/i;
+             if (doiRegex.test(doc.body.textContent)) {
+                 doiFound = true;
+                 addLog(`[Enricher] Found DOI via regex in body text for ${source.link}`);
+             }
+        }
+
+        const enrichedTitle = title ? stripTags(title) : source.title;
+        let enrichedSnippet = abstract ? stripTags(abstract) : source.snippet;
+
+        if(doiFound) {
+            enrichedSnippet = `[DOI Found] ${enrichedSnippet}`;
+        }
+        
+        if (abstract) {
+            addLog(`[Enricher] Successfully enriched snippet for ${source.link}. DOI found: ${doiFound}`);
+        } else {
+            addLog(`[Enricher] WARN: Could not enrich snippet for ${source.link}. Using original snippet. DOI found: ${doiFound}`);
+        }
+
+        return {
+            ...source,
+            title: enrichedTitle,
+            snippet: enrichedSnippet,
+        };
+
     } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error';
-        addLog(`[Enricher.PubMed] WARN: Failed to enrich PMID ${pmid}: ${message}`);
-        return result; // Return original on failure
+        addLog(`[Enricher] ERROR: Failed to fetch or parse ${source.link}: ${message}. Returning original source.`);
+        return {
+            ...source,
+            snippet: `Fetch failed: ${message}. Original snippet: ${source.snippet}`
+        };
     }
 };
 
-export const enrichSearchResults = async (results: SearchResult[], addLog: (message:string) => void): Promise<SearchResult[]> => {
-    addLog(`[Enricher] Starting enrichment process for ${results.length} results.`);
-    const enrichmentPromises = results.map(async result => {
-        const isPrimary = isPrimarySourceDomain(result.link);
-        // Condition for enrichment: is a primary source AND has a generic/short snippet.
-        const needsEnrichment = isPrimary && (result.snippet.length < 150 || result.snippet.startsWith('Source from'));
+export const enrichPrimarySources = async (sources: SearchResult[], addLog: (message: string) => void): Promise<SearchResult[]> => {
+    if (!sources || sources.length === 0) return [];
 
-        if (!needsEnrichment) {
-            return result;
-        }
-
-        // Specific enrichment logic for PubMed
-        if (result.link.includes('pubmed.ncbi.nlm.nih.gov')) {
-            return enrichPubMedResult(result, addLog);
-        }
-        
-        // Future: Add more generic scrapers here for other domains if needed.
-
-        return result; // Return original if no specific enricher matches
-    });
-
-    const enriched = await Promise.all(enrichmentPromises);
-    addLog(`[Enricher] Enrichment process complete.`);
-    return enriched;
+    addLog(`[Enricher] Starting enrichment for ${sources.length} primary sources.`);
+    
+    const enrichmentPromises = sources.map(source => enrichPrimarySource(source, addLog));
+    
+    const results = await Promise.all(enrichmentPromises);
+    
+    addLog(`[Enricher] Enrichment process finished.`);
+    return results;
 };

@@ -6,7 +6,7 @@ import {
     SearchDataSource, type SearchResult, ContradictionTolerance, ModelProvider
 } from '../types';
 import { buildAgentPrompts, buildChatPrompt, buildDiscoverAndValidatePrompt, buildFilterBioRxivFeedPrompt, buildRelevanceFilterPrompt } from './agentPrompts';
-import { performFederatedSearch, excavatePrimarySources, isPrimarySourceDomain, enrichSearchResults, performGoogleSearch } from './searchService';
+import { performFederatedSearch, isPrimarySourceDomain, performGoogleSearch, excavatePrimarySources, enrichPrimarySources } from './searchService';
 
 const MAX_SOURCES_FOR_ANALYSIS = 40; // A safer limit to avoid context overflows
 
@@ -214,7 +214,7 @@ export class ApiClient {
         this.addLog(`[discoverAndValidateSources] Starting with enabled sources: ${enabledSources.join(', ')}`);
 
         if (model.provider === ModelProvider.Ollama) {
-            setLoadingMessage("Step 1/3: Searching for context...");
+            setLoadingMessage("Step 1/4: Searching for context...");
             this.addLog('[discoverAndValidateSources] Ollama model detected. Performing federated search.');
             const searchResults = await performFederatedSearch(query, enabledSources, this.addLog);
             const uniqueSearchResults = Array.from(new Map(searchResults.map(item => [item.link, item])).values());
@@ -231,7 +231,7 @@ export class ApiClient {
                 this.addLog(`[discoverAndValidateSources] Limiting sources for Ollama filtering from ${uniqueSearchResults.length} to ${MAX_SOURCES_FOR_ANALYSIS}.`);
             }
 
-            setLoadingMessage("Step 2/3: Filtering relevant sources...");
+            setLoadingMessage("Step 2/4: Filtering relevant sources...");
             this.addLog(`[discoverAndValidateSources] Asking Ollama to filter ${resultsToFilter.length} results for relevance.`);
             const { systemInstruction, userPrompt } = buildRelevanceFilterPrompt(query, resultsToFilter);
             
@@ -242,20 +242,23 @@ export class ApiClient {
                 const jsonText = parseJsonFromText(responseText, this.addLog);
                 const parsed = JSON.parse(jsonText);
                 
-                let urls: string[] = [];
-                if (parsed.relevantArticleUrls && Array.isArray(parsed.relevantArticleUrls)) {
-                    this.addLog(`[discoverAndValidateSources] Found 'relevantArticleUrls' key. Processing.`);
-                    urls = parsed.relevantArticleUrls;
-                } else if (parsed.articles && Array.isArray(parsed.articles)) {
-                    this.addLog(`[discoverAndValidateSources] WARN: 'relevantArticleUrls' key not found. Found 'articles' key instead. Attempting to parse fallback structure.`);
-                    urls = parsed.articles.map((article: any) => article.url || article.link || article.uri).filter(Boolean);
-                } else {
-                    this.addLog(`[discoverAndValidateSources] WARN: Could not find 'relevantArticleUrls' or 'articles' key in AI response. Assuming no relevant articles found.`);
-                }
+                const indices: number[] = (parsed.relevantArticleIndices || []).filter((i: any) => typeof i === 'number');
 
-                const relevantUrls = new Set(urls);
-                relevantResults = resultsToFilter.filter(res => relevantUrls.has(res.link));
-                this.addLog(`[discoverAndValidateSources] Ollama filtered down to ${relevantResults.length} relevant sources.`);
+                if (indices.length > 0) {
+                     relevantResults = indices
+                        .map(index => {
+                            const res = resultsToFilter[index - 1]; // 1-based index from prompt
+                            if (!res) {
+                                this.addLog(`[discoverAndValidateSources] WARN: AI returned an out-of-bounds index: ${index}`);
+                            }
+                            return res;
+                        })
+                        .filter((res): res is SearchResult => !!res);
+                     this.addLog(`[discoverAndValidateSources] Ollama filtered down to ${relevantResults.length} relevant sources via indices.`);
+                } else {
+                     this.addLog(`[discoverAndValidateSources] WARN: AI did not return any valid indices. This could be correct (no relevant articles) or a model failure.`);
+                     relevantResults = [];
+                }
             } catch (e) {
                 this.addLog(`[discoverAndValidateSources] WARN: Ollama relevance filtering failed. Proceeding with all ${resultsToFilter.length} sources. Error: ${e}`);
                 relevantResults = resultsToFilter;
@@ -265,21 +268,37 @@ export class ApiClient {
               throw new Error("Ollama model filtered out all search results as irrelevant.");
             }
 
-            setLoadingMessage("Step 3/3: Excavating primary sources...");
-            const enrichedResults = await enrichSearchResults(relevantResults, this.addLog);
-            const directPrimaryResults = enrichedResults.filter(res => isPrimarySourceDomain(res.link));
-            const secondaryResults = enrichedResults.filter(res => !isPrimarySourceDomain(res.link));
-            const excavatedResults = await excavatePrimarySources(secondaryResults, this.addLog);
+            setLoadingMessage("Step 3/4: Excavating primary sources...");
             
-            const finalPrimaryResults = Array.from(new Map([...directPrimaryResults, ...excavatedResults].map(item => [item.link, item])).values());
-    
+            const initialPrimaryResults = relevantResults.filter(res => isPrimarySourceDomain(res.link));
+            const secondaryResults = relevantResults.filter(res => !isPrimarySourceDomain(res.link));
+            
+            this.addLog(`[discoverAndValidateSources] OLLAMA Path: Found ${initialPrimaryResults.length} initial primary sources and ${secondaryResults.length} secondary sources for excavation.`);
+
+            let excavatedPrimaryResults: SearchResult[] = [];
+            if (secondaryResults.length > 0) {
+                excavatedPrimaryResults = await excavatePrimarySources(secondaryResults, this.addLog);
+            }
+
+            const allPrimaryResults = [...initialPrimaryResults, ...excavatedPrimaryResults];
+            const finalPrimaryResults = Array.from(new Map(allPrimaryResults.map(item => [item.link, item])).values());
+            
+            this.addLog(`[discoverAndValidateSources] OLLAMA Path: Combined initial and excavated sources. Total unique primary sources: ${finalPrimaryResults.length}.`);
+
             if (finalPrimaryResults.length === 0) {
                 throw new Error("Could not find any primary scientific sources for the topic after filtering and excavation.");
             }
             
-            const limitedResults = finalPrimaryResults.slice(0, MAX_SOURCES_FOR_ANALYSIS);
-            if(finalPrimaryResults.length > MAX_SOURCES_FOR_ANALYSIS) {
-                this.addLog(`[discoverAndValidateSources] Limiting sources for Ollama context from ${finalPrimaryResults.length} to ${MAX_SOURCES_FOR_ANALYSIS}.`);
+            setLoadingMessage("Step 4/4: Enriching primary sources...");
+            const enrichedPrimaryResults = await enrichPrimarySources(finalPrimaryResults, this.addLog);
+
+            if (enrichedPrimaryResults.length === 0) {
+                throw new Error("Could not find or enrich any primary scientific sources for the topic after filtering and excavation.");
+            }
+
+            const limitedResults = enrichedPrimaryResults.slice(0, MAX_SOURCES_FOR_ANALYSIS);
+            if(enrichedPrimaryResults.length > MAX_SOURCES_FOR_ANALYSIS) {
+                this.addLog(`[discoverAndValidateSources] Limiting sources for Ollama context from ${enrichedPrimaryResults.length} to ${MAX_SOURCES_FOR_ANALYSIS}.`);
             }
     
             const groundingSources: GroundingSource[] = limitedResults.map(res => ({
@@ -289,7 +308,7 @@ export class ApiClient {
                 origin: res.source,
                 content: res.snippet,
                 reliability: 0.5, // Assign a neutral reliability for Ollama path
-                reliabilityJustification: "Source relevance assessed by local AI; reliability not deeply analyzed."
+                reliabilityJustification: "Source relevance assessed by local AI; content enriched but reliability not deeply analyzed."
             }));
     
             this.addLog(`[discoverAndValidateSources] Found ${groundingSources.length} sources for Ollama context.`);
@@ -343,27 +362,35 @@ export class ApiClient {
             return [];
         }
         
-        setLoadingMessage("Step 2/4: Enriching source metadata...");
-        const enrichedResults = await enrichSearchResults(uniqueSearchResults, this.addLog);
+        setLoadingMessage("Step 2/4: Excavating primary sources...");
 
-        setLoadingMessage("Step 3/4: Excavating primary links...");
-        const directPrimaryResults = enrichedResults.filter(res => isPrimarySourceDomain(res.link));
-        const secondaryResults = enrichedResults.filter(res => !isPrimarySourceDomain(res.link));
-        this.addLog(`[discoverAndValidateSources] Triage: ${directPrimaryResults.length} direct primary sources, ${secondaryResults.length} secondary to excavate.`);
+        const initialPrimaryResults = uniqueSearchResults.filter(res => isPrimarySourceDomain(res.link));
+        const secondaryResults = uniqueSearchResults.filter(res => !isPrimarySourceDomain(res.link));
         
-        const excavatedResults = await excavatePrimarySources(secondaryResults, this.addLog);
+        this.addLog(`[discoverAndValidateSources] Found ${initialPrimaryResults.length} initial primary sources and ${secondaryResults.length} secondary sources for excavation.`);
+        
+        let excavatedPrimaryResults: SearchResult[] = [];
+        if (secondaryResults.length > 0) {
+            excavatedPrimaryResults = await excavatePrimarySources(secondaryResults, this.addLog);
+        }
 
-        const finalPrimaryResults = Array.from(new Map([...directPrimaryResults, ...excavatedResults].map(item => [item.link, item])).values());
+        const allPrimaryResults = [...initialPrimaryResults, ...excavatedPrimaryResults];
+        const finalPrimaryResults = Array.from(new Map(allPrimaryResults.map(item => [item.link, item])).values());
         
+        this.addLog(`[discoverAndValidateSources] Combined initial and excavated sources. Total unique primary sources: ${finalPrimaryResults.length}.`);
+
         if (finalPrimaryResults.length === 0) {
             this.addLog("[discoverAndValidateSources] No primary sources found after enrichment and excavation.");
-            throw new Error("Could not find any primary scientific sources for the topic.");
+            throw new Error("Could not find any primary scientific sources for the topic after filtering and excavation.");
         }
-        this.addLog(`[discoverAndValidateSources] Total primary sources for assessment: ${finalPrimaryResults.length}.`);
+        
+        setLoadingMessage("Step 3/4: Enriching primary source content...");
+        const enrichedPrimaryResults = await enrichPrimarySources(finalPrimaryResults, this.addLog);
+        this.addLog(`[discoverAndValidateSources] Total primary sources for assessment: ${enrichedPrimaryResults.length}.`);
 
         setLoadingMessage("Step 4/4: AI assessing source reliability...");
-        this.addLog(`[discoverAndValidateSources] Sending ${finalPrimaryResults.length} curated primary sources to AI for assessment.`);
-        const { systemInstruction, userPrompt } = buildDiscoverAndValidatePrompt(query, finalPrimaryResults);
+        this.addLog(`[discoverAndValidateSources] Sending ${enrichedPrimaryResults.length} curated primary sources to AI for assessment.`);
+        const { systemInstruction, userPrompt } = buildDiscoverAndValidatePrompt(query, enrichedPrimaryResults);
 
         try {
             const response = await this.callGoogleAI(model.id, systemInstruction, userPrompt, false);
@@ -375,7 +402,7 @@ export class ApiClient {
                 return [];
             }
 
-            const finalPrimaryResultsMap = new Map(finalPrimaryResults.map(res => [res.link, res]));
+            const finalPrimaryResultsMap = new Map(enrichedPrimaryResults.map(res => [res.link, res]));
 
             const assessedSources: GroundingSource[] = data.sources.map((s: any) => {
                 const originalSource = finalPrimaryResultsMap.get(s.uri);

@@ -22,7 +22,7 @@ export const buildRelevanceFilterPrompt = (
     searchResults: SearchResult[]
 ): { systemInstruction: string; userPrompt: string } => {
     const context = searchResults.map((item, i) =>
-        `<ARTICLE ${i + 1}>\n<URL>${item.link}</URL>\n<TITLE>${item.title}</TITLE>\n<SNIPPET>${item.snippet}</SNIPPET>\n</ARTICLE>`
+        `<ARTICLE index="${i + 1}">\n<URL>${item.link}</URL>\n<TITLE>${item.title}</TITLE>\n<SNIPPET>${item.snippet}</SNIPPET>\n</ARTICLE>`
     ).join('\n\n');
 
     const userPrompt = `Research Topic: "${query}"\n\nArticle List:\n\n${context}`;
@@ -30,22 +30,19 @@ export const buildRelevanceFilterPrompt = (
     const systemInstruction = `You are a JSON-generating relevance filter. Your response MUST be a single, valid JSON object and nothing else.
 
 **Your Task:**
-1. You are given a research topic and a list of articles.
+1. You are given a research topic and a list of articles, each with a unique "index".
 2. Identify which articles are relevant. An article is relevant if its title or snippet directly discusses the topic.
-3. Your output MUST be a JSON object with a single key: "relevantArticleUrls".
-4. The value of "relevantArticleUrls" MUST be an array of strings.
-5. Each string in the array must be the exact URL of a relevant article from the provided list.
+3. Your output MUST be a JSON object with a single key: "relevantArticleIndices".
+4. The value of "relevantArticleIndices" MUST be an array of numbers.
+5. Each number in the array must be the exact index of a relevant article from the provided list.
 
 **Example:**
 {
-  "relevantArticleUrls": [
-    "https://www.biorxiv.org/content/10.1101/2025.07.20.665786v1",
-    "https://patents.google.com/patent/US20240108645A1/en"
-  ]
+  "relevantArticleIndices": [1, 5, 8]
 }
 
 **Rules:**
-- If no articles are relevant, return an empty array: { "relevantArticleUrls": [] }.
+- If no articles are relevant, return an empty array: { "relevantArticleIndices": [] }.
 - Do NOT use markdown code blocks.
 - Do NOT add any explanation or text outside the single JSON object.`;
     return { systemInstruction, userPrompt };
@@ -63,9 +60,9 @@ export const buildDiscoverAndValidatePrompt = (
 
     const userPrompt = `For the research query "${query}", please assess and summarize the following primary scientific sources.\n\n${searchContext}`;
     
-    const systemInstruction = `You are an expert research analyst and critical appraisal specialist. Your task is to take a provided list of pre-filtered, primary scientific sources (papers, patents) and perform two tasks for each:
-1.  **Summarize:** Create a concise, accurate summary of its core scientific claims, methods, or results based on the provided content.
-2.  **Assess Reliability:** Evaluate the likely reliability of the source based *only* on the provided information and assign a numerical score.
+    const systemInstruction = `You are an expert research analyst and critical appraisal specialist. Your task is to take a provided list of primary scientific sources (papers, patents) and perform two tasks for each:
+1.  **Summarize:** Create a concise, accurate summary of its core scientific claims, methods, or results. Since the provided <SNIPPET> may be minimal or a placeholder, you MUST infer the summary from the <TITLE> and the context of the <URL>.
+2.  **Assess Reliability:** Evaluate the likely reliability of the source based on all provided information and assign a numerical score.
 
 Your output MUST be a single, valid JSON object enclosed in a markdown code block (\`\`\`json ... \`\`\`).
 
@@ -74,22 +71,24 @@ The JSON object must have the following structure:
   "sources": [{
     "uri": "string (The full URL of the source.)",
     "title": "string (The title of the source document.)",
-    "summary": "string (A 2-4 sentence summary of the source's key scientific information. This summary is vital as it will be the ONLY content used for the final analysis.)",
+    "summary": "string (A 2-4 sentence summary of the source's key scientific information. This summary is vital as it will be the ONLY content used for the final analysis. **You must generate this summary from the title and URL.**)",
     "reliability": "float (A score from 0.0 to 1.0 representing the source's likely reliability.)",
     "reliabilityJustification": "string (A brief explanation for your reliability score.)"
   }]
 }
 
 **CRITICAL INSTRUCTIONS FOR RELIABILITY ASSESSMENT:**
-- **Base your assessment ONLY on the provided <TITLE> and <SNIPPET>.** Do not use external knowledge.
-- **Title/Content Mismatch:** If the title and the snippet appear to describe completely different topics, you MUST assign a reliability score of 0.1 and explicitly state "Title/content mismatch" in the justification. This is a critical check for data corruption.
-- **High Score (0.8-1.0):** Title/snippet suggests a peer-reviewed publication in a reputable journal (e.g., Nature, Cell, Science), a systematic review, a meta-analysis, or a large randomized controlled trial (RCT). Claims are specific and quantitative.
-- **Medium Score (0.5-0.7):** Title/snippet suggests a standard research article, a preprint (e.g., from bioRxiv), or a detailed patent. Claims are plausible but may lack detail on sample size or statistical power in the snippet.
-- **Low Score (0.2-0.4):** Title/snippet is vague, from a less common source, or lacks specific data. The claim might be very preliminary (e.g., 'in vitro' study with no clear translational path mentioned).
-- **Very Low Score (0.0-0.1):** The snippet is uninformative, appears to be an error, or suggests non-scientific content that slipped through the initial filter.
+- **Base your assessment on the <TITLE>, <URL>, and <SNIPPET>.** Do not use external knowledge.
+- **The URL domain is a STRONG signal.** A URL from 'nature.com', 'cell.com', 'pubmed.ncbi.nlm.nih.gov', 'biorxiv.org', or other known scientific publishers indicates a primary source.
+- **The tag '[DOI Found]' at the start of a <SNIPPET> is a VERY STRONG positive signal.** It confirms the source is a canonical scientific article. You should significantly increase the reliability score if you see this tag.
+- **High Score (0.8-1.0):** URL is from a top-tier peer-reviewed journal (e.g., Nature, Cell, Science) AND/OR the snippet contains '[DOI Found]'. Title is specific and scientific.
+- **Medium Score (0.5-0.7):** URL is from a known preprint server (e.g., bioRxiv) or a mid-tier journal. Title is relevant and plausible.
+- **Low Score (0.2-0.4):** URL is from a less common source, or the title is vague. The claim might be very preliminary.
+- **Very Low Score (0.0-0.1):** The title and URL suggest non-scientific content, a 404 page, or an obvious error.
 
 **GENERAL INSTRUCTIONS:**
 - Create a summary and reliability assessment for EVERY source provided. Do not omit any.
+- When creating the 'summary' in your JSON output, you MUST OMIT the '[DOI Found]' tag. Do not include it in the final summary text.
 - Your entire response MUST consist of ONLY the JSON object within a markdown code block. Do not include any other text or explanations.`;
 
     return { systemInstruction, userPrompt };
