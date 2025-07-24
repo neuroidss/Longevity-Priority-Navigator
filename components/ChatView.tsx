@@ -1,5 +1,5 @@
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import { ChatMessage, KnowledgeGraphNode, GroundingSource } from '../types';
 import { LightbulbIcon, NetworkIcon } from './icons';
 import { TextWithCitations } from './ResultsDisplay';
@@ -18,35 +18,24 @@ const generateContextualQuestions = (node: KnowledgeGraphNode): string[] => {
     return questions.slice(0, 3);
 };
 
-interface ChatViewProps {
-    chatHistory: ChatMessage[];
-    isChatting: boolean;
+interface DefaultChatInputProps {
     onSendMessage: (message: string) => void;
     isWorkspaceReady: boolean;
-    selectedNode: KnowledgeGraphNode | null;
-    onClearSelectedNode: () => void;
-    sources: GroundingSource[];
+    isChatting: boolean;
 }
 
-const ChatView: React.FC<ChatViewProps> = ({ 
-    chatHistory, isChatting, onSendMessage, isWorkspaceReady, selectedNode, onClearSelectedNode, sources
+const DefaultChatInput: React.FC<DefaultChatInputProps> = ({
+    onSendMessage,
+    isWorkspaceReady,
+    isChatting
 }) => {
     const [input, setInput] = useState('');
-    const endOfMessagesRef = useRef<HTMLDivElement>(null);
-
-    // NOTE: The auto-scrolling useEffect was removed as per user request to stop all forced scrolling/focus changes.
-    // The user can now manually scroll the chat panel.
 
     const handleSend = () => {
         if (input.trim()) {
             onSendMessage(input);
             setInput('');
         }
-    };
-
-    const handleContextualSend = (question: string) => {
-        onSendMessage(question);
-        onClearSelectedNode();
     };
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -56,7 +45,7 @@ const ChatView: React.FC<ChatViewProps> = ({
         }
     };
 
-    const DefaultChatInput = () => (
+    return (
         <div className="p-4 border-t border-slate-700">
             <div className="flex items-center gap-3 bg-slate-800 rounded-lg p-2 border border-slate-600 focus-within:ring-2 focus-within:ring-purple-500">
                 <textarea
@@ -67,6 +56,7 @@ const ChatView: React.FC<ChatViewProps> = ({
                     className="flex-grow bg-transparent focus:outline-none text-sm text-slate-200 placeholder-slate-500 resize-none"
                     rows={2}
                     disabled={isChatting || !isWorkspaceReady}
+                    aria-label="Chat input"
                 />
                 <button
                     onClick={handleSend}
@@ -81,36 +71,69 @@ const ChatView: React.FC<ChatViewProps> = ({
             </div>
         </div>
     );
+};
 
-    const ContextualChatInput = ({ node }: { node: KnowledgeGraphNode }) => {
-        const questions = generateContextualQuestions(node);
-        return (
-             <div className="p-4 border-t border-slate-700 bg-slate-800/70">
-                <div className="text-center mb-3">
-                    <p className="text-sm text-slate-400">Ask about node:</p>
-                    <p className="font-bold text-lg text-teal-300">{node.label} <span className="text-xs font-normal text-slate-500">({node.type})</span></p>
-                </div>
-                <div className="space-y-2">
-                    {questions.map((q, i) => (
-                        <button 
-                            key={i}
-                            onClick={() => handleContextualSend(q)}
-                            disabled={isChatting}
-                            className="w-full text-left text-sm p-2 bg-slate-700/50 rounded-md hover:bg-slate-600/50 text-slate-300 disabled:opacity-50 transition-colors"
-                        >
-                           {`"${q}"`}
-                        </button>
-                    ))}
-                </div>
-                <button 
-                    onClick={onClearSelectedNode}
-                    className="w-full text-center text-xs mt-3 text-slate-500 hover:text-slate-300"
-                >
-                    or ask something else...
-                </button>
-            </div>
-        );
+
+interface ContextualChatInputProps {
+    node: KnowledgeGraphNode;
+    onSendMessage: (message: string) => void;
+    isChatting: boolean;
+    onClearSelectedNode: () => void;
+}
+
+const ContextualChatInput: React.FC<ContextualChatInputProps> = ({ node, onSendMessage, isChatting, onClearSelectedNode }) => {
+    const questions = generateContextualQuestions(node);
+    
+    const handleContextualSend = (question: string) => {
+        onSendMessage(question);
+        onClearSelectedNode();
     };
+
+    return (
+         <div className="p-4 border-t border-slate-700 bg-slate-800/70">
+            <div className="text-center mb-3">
+                <p className="text-sm text-slate-400">Ask about node:</p>
+                <p className="font-bold text-lg text-teal-300">{node.label} <span className="text-xs font-normal text-slate-500">({node.type})</span></p>
+            </div>
+            <div className="space-y-2">
+                {questions.map((q, i) => (
+                    <button 
+                        key={i}
+                        onClick={() => handleContextualSend(q)}
+                        disabled={isChatting}
+                        className="w-full text-left text-sm p-2 bg-slate-700/50 rounded-md hover:bg-slate-600/50 text-slate-300 disabled:opacity-50 transition-colors"
+                    >
+                       {`"${q}"`}
+                    </button>
+                ))}
+            </div>
+            <button 
+                onClick={onClearSelectedNode}
+                className="w-full text-center text-xs mt-3 text-slate-500 hover:text-slate-300"
+            >
+                or ask something else...
+            </button>
+        </div>
+    );
+};
+
+interface ChatViewProps {
+    chatHistory: ChatMessage[];
+    isChatting: boolean;
+    onSendMessage: (message: string) => void;
+    isWorkspaceReady: boolean;
+    selectedNode: KnowledgeGraphNode | null;
+    onClearSelectedNode: () => void;
+    sources: GroundingSource[];
+}
+
+const ChatView: React.FC<ChatViewProps> = ({ 
+    chatHistory, isChatting, onSendMessage, isWorkspaceReady, selectedNode, onClearSelectedNode, sources
+}) => {
+    const endOfMessagesRef = useRef<HTMLDivElement>(null);
+
+    // NOTE: The auto-scrolling useEffect was removed as per user request to stop all forced scrolling/focus changes.
+    // The user can now manually scroll the chat panel.
 
     return (
         <div className="flex flex-col h-[85vh] bg-slate-900/50 rounded-lg border border-slate-700">
@@ -174,7 +197,19 @@ const ChatView: React.FC<ChatViewProps> = ({
                 ))}
                 <div ref={endOfMessagesRef} />
             </div>
-            {selectedNode ? <ContextualChatInput node={selectedNode} /> : <DefaultChatInput />}
+            {selectedNode 
+                ? <ContextualChatInput 
+                    node={selectedNode} 
+                    onSendMessage={onSendMessage} 
+                    isChatting={isChatting} 
+                    onClearSelectedNode={onClearSelectedNode}
+                  /> 
+                : <DefaultChatInput 
+                    onSendMessage={onSendMessage}
+                    isWorkspaceReady={isWorkspaceReady} 
+                    isChatting={isChatting}
+                  />
+            }
         </div>
     );
 };
