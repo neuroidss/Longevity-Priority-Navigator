@@ -1,6 +1,6 @@
 
 
-import { type ModelDefinition, type AnalysisLens, SearchDataSource } from './types';
+import { type ModelDefinition, type AnalysisLens, SearchDataSource, ModelProvider } from './types';
 import { ArticleIcon, PatentIcon, GoogleIcon, GeneIcon, WebIcon } from './components/icons';
 import React from 'react';
 
@@ -21,15 +21,22 @@ export const EXAMPLE_TOPICS = [
 ];
 
 export const SUPPORTED_MODELS: ModelDefinition[] = [
-    { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', provider: 'Google AI' },
-    { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash-Lite', provider: 'Google AI' },
-    { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash', provider: 'Google AI' },
-    { id: 'gemini-2.0-flash-lite', name: 'Gemini 2.0 Flash-Lite', provider: 'Google AI' },
+    { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', provider: ModelProvider.GoogleAI },
+    { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash-Lite', provider: ModelProvider.GoogleAI },
+    { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash', provider: ModelProvider.GoogleAI },
+    { id: 'gemini-2.0-flash-lite', name: 'Gemini 2.0 Flash-Lite', provider: ModelProvider.GoogleAI },
+    { id: 'gemma3n:e4b', name: 'Gemma 3N E4B (Ollama)', provider: ModelProvider.Ollama },
+    { id: 'gemma3n:e2b', name: 'Gemma 3N E2B (Ollama)', provider: ModelProvider.Ollama },
+    { id: 'qwen3:14b', name: 'Qwen3 14B (Ollama)', provider: ModelProvider.Ollama },
+    { id: 'qwen3:8b', name: 'Qwen3 8B (Ollama)', provider: ModelProvider.Ollama },
+    { id: 'qwen3:4b', name: 'Qwen3 4B (Ollama)', provider: ModelProvider.Ollama },
+    { id: 'qwen3:1.7b', name: 'Qwen3 1.7B (Ollama)', provider: ModelProvider.Ollama },
+    { id: 'qwen3:0.6b', name: 'Qwen3 0.6B (Ollama)', provider: ModelProvider.Ollama }
 ];
 
 export const DATA_SOURCE_DEFINITIONS: Record<SearchDataSource, { label: string; icon: JSX.Element; description: string }> = {
     [SearchDataSource.GoogleSearch]: { label: 'Google Search', icon: React.createElement(GoogleIcon), description: 'AI-powered search via Gemini for grounding. Good for finding very recent or specific information.' },
-    [SearchDataSource.WebSearch]: { label: 'Web Search', icon: React.createElement(WebIcon), description: 'General web search via DuckDuckGo for broader coverage.' },
+    [SearchDataSource.WebSearch]: { label: 'Web Search (DuckDuckGo)', icon: React.createElement(WebIcon), description: 'General web search via DuckDuckGo for broader coverage.' },
     [SearchDataSource.PubMed]: { label: 'PubMed', icon: React.createElement(ArticleIcon), description: 'Official database of biomedical literature from NCBI.' },
     [SearchDataSource.BioRxivFeed]: { label: 'bioRxiv Feed', icon: React.createElement(ArticleIcon), description: 'Monitor the live feed of new preprints for very recent papers.' },
     [SearchDataSource.BioRxivPmcArchive]: { label: 'bioRxiv (PMC Archive)', icon: React.createElement(ArticleIcon), description: 'Search the PubMed Central archive for bioRxiv preprints. A good fallback.' },

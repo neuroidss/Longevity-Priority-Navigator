@@ -1,10 +1,12 @@
 
-import React, { useState, useEffect } from 'react';
-import { AgentType, type AnalysisLens, type ChatMessage, type KnowledgeGraphNode, type GroundingSource, type WorkspaceState, SourceStatus, ContradictionTolerance } from './types';
-import { chatWithWorkspace } from './services/geminiService';
+
+import React, { useState, useEffect, useMemo } from 'react';
+import { AgentType, type AnalysisLens, type ChatMessage, type KnowledgeGraphNode, type GroundingSource, type WorkspaceState, SourceStatus, ContradictionTolerance, ModelProvider } from './types';
+import { ApiClient } from './services/geminiService';
 import { useAppSettings } from './hooks/useAppSettings';
 import { useWorkspaceManager } from './hooks/useWorkspaceManager';
 import { useDebugLog } from './hooks/useDebugLog';
+import { useApiUsageManager } from './hooks/useApiUsageManager';
 
 import Header from './components/Header';
 import AgentControlPanel from './components/SearchBar';
@@ -92,10 +94,17 @@ const App: React.FC = () => {
       model, setModel, apiKey, setApiKey, contradictionTolerance, 
       setContradictionTolerance, selectedDataSources, setSelectedDataSources 
     } = settings;
+    const { usageState, setApiCallLimit, checkAndIncrement } = useApiUsageManager(addLog);
+
+    const apiClient = useMemo(() => 
+        new ApiClient(apiKey, addLog, checkAndIncrement),
+        [apiKey, addLog, checkAndIncrement]
+    );
+
     const { 
       topic, setTopic, workspace, setWorkspace, isLoading, loadingMessage, 
       error, hasSearched, handleDispatchAgent 
-    } = useWorkspaceManager({ settings, addLog, storageKey: APP_STATE_STORAGE_KEY });
+    } = useWorkspaceManager({ settings, apiClient, addLog, storageKey: APP_STATE_STORAGE_KEY });
     
     const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
     const [isChatting, setIsChatting] = useState(false);
@@ -148,7 +157,7 @@ const App: React.FC = () => {
         setIsChatting(true);
 
         try {
-            const aiResponseText = await chatWithWorkspace(message, workspace, model, apiKey, addLog);
+            const aiResponseText = await apiClient.chatWithWorkspace(message, workspace, model);
             const finalAiMessage: ChatMessage = { ...aiLoadingMessage, text: aiResponseText, isLoading: false };
             
             const finalHistory = newHistory.map(msg => msg.id === aiLoadingMessage.id ? finalAiMessage : msg);
@@ -196,6 +205,8 @@ const App: React.FC = () => {
                     setContradictionTolerance={setContradictionTolerance}
                     selectedDataSources={selectedDataSources}
                     onDataSourceChange={setSelectedDataSources}
+                    apiCallLimit={usageState.limit}
+                    onApiCallLimitChange={setApiCallLimit}
                 />
                 <Dashboard
                     activeTab={activeTab}
@@ -218,6 +229,8 @@ const App: React.FC = () => {
             <DebugLogView 
                 logs={logs} 
                 onReset={handleResetProgress} 
+                apiCallCount={usageState.count}
+                apiCallLimit={usageState.limit}
             />
         </main>
     );

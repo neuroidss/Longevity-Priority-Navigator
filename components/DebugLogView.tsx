@@ -1,12 +1,25 @@
+
 import React, { useState } from 'react';
+import { BeakerIcon } from './icons';
 
 interface DebugLogViewProps {
     logs: string[];
     onReset: () => void;
+    apiCallCount: number;
+    apiCallLimit: number;
 }
 
-const DebugLogView: React.FC<DebugLogViewProps> = ({ logs, onReset }) => {
+const DebugLogView: React.FC<DebugLogViewProps> = ({ logs, onReset, apiCallCount, apiCallLimit }) => {
     const [isOpen, setIsOpen] = useState(false);
+
+    const usagePercentage = apiCallLimit > 0 ? (apiCallCount / apiCallLimit) * 100 : 0;
+    let usageColorClass = 'text-green-400';
+    if (usagePercentage > 90) {
+        usageColorClass = 'text-red-500';
+    } else if (usagePercentage > 70) {
+        usageColorClass = 'text-yellow-400';
+    }
+
 
     return (
         <div className="fixed bottom-4 right-4 z-[100]">
@@ -48,16 +61,23 @@ const DebugLogView: React.FC<DebugLogViewProps> = ({ logs, onReset }) => {
                     })}
                 </div>
             </div>
-             <button
-                onClick={() => setIsOpen(!isOpen)}
-                className="bg-slate-700 text-white px-4 py-2 rounded-lg shadow-lg hover:bg-slate-600 flex items-center gap-2"
-                aria-label="Toggle debug log"
-            >
-                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 102 0V6zM10 15a1 1 0 110-2 1 1 0 010 2z" clipRule="evenodd" />
-                </svg>
-                Debug Log ({logs.length})
-            </button>
+            <div className="flex items-center gap-2">
+                 <div title="API Calls Used Today" className="flex items-center gap-2 bg-slate-700 text-white px-3 py-2 rounded-lg shadow-lg">
+                     <BeakerIcon className="h-5 w-5 text-cyan-400" />
+                     <span className={`font-mono text-sm font-bold ${usageColorClass}`}>{apiCallCount} / {apiCallLimit}</span>
+                 </div>
+                 <button
+                    onClick={() => setIsOpen(!isOpen)}
+                    className="bg-slate-700 text-white px-4 py-2 rounded-lg shadow-lg hover:bg-slate-600 flex items-center gap-2"
+                    aria-label="Toggle debug log"
+                    aria-expanded={isOpen}
+                >
+                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 102 0V6zM10 15a1 1 0 110-2 1 1 0 010 2z" clipRule="evenodd" />
+                    </svg>
+                    Log ({logs.length})
+                </button>
+            </div>
         </div>
     );
 };

@@ -1,5 +1,6 @@
 
 import { SearchDataSource, type SearchResult, type GeneSearchedRecord, type OpenGeneSearchResponse } from '../types';
+import { GenerateContentResponse } from "@google/genai";
 
 type ProxyUrlBuilder = (url: string) => string;
 
@@ -73,6 +74,49 @@ const fetchWithCorsFallback = async (url: string, addLog: (message: string) => v
 };
 
 const stripTags = (html: string) => html.replace(/<[^>]*>?/gm, '').trim();
+
+export const performGoogleSearch = async (
+    query: string,
+    addLog: (msg: string) => void,
+    performAiCall: () => Promise<GenerateContentResponse>
+): Promise<SearchResult[]> => {
+    addLog(`[performGoogleSearch] Starting AI-powered web search...`);
+    try {
+        const response = await performAiCall();
+        const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
+        
+        if (!groundingChunks || !Array.isArray(groundingChunks)) {
+            addLog(`[performGoogleSearch] WARN: AI did not return valid grounding chunks from Google Search.`);
+             if (response.text && response.text.length > 10) {
+                 addLog(`[performGoogleSearch] Grounding chunks absent, but text is present. AI might have summarized instead of grounding. This text will be ignored as it cannot be verified.`);
+             }
+            return [];
+        }
+
+        const searchResults: SearchResult[] = groundingChunks
+            .map((chunk: any) => {
+                if (chunk.web && chunk.web.uri) { // Title is now optional, will be enriched later
+                    return {
+                        link: chunk.web.uri,
+                        title: chunk.web.title || new URL(chunk.web.uri).hostname, // Use hostname as fallback title
+                        snippet: `Source from Google Search for: "${query}".`, 
+                        source: SearchDataSource.GoogleSearch
+                    };
+                }
+                return null;
+            })
+            .filter((r): r is SearchResult => r !== null);
+
+        addLog(`[performGoogleSearch] Found ${searchResults.length} sources from Google Search grounding.`);
+        const uniqueResults = Array.from(new Map(searchResults.map(item => [item.link, item])).values());
+        return uniqueResults;
+
+    } catch (e) {
+        const message = e instanceof Error ? e.message : 'Unknown error during Google Search';
+        addLog(`[performGoogleSearch] ERROR: ${message}`);
+        return [];
+    }
+};
 
 /**
  * Performs a web search using DuckDuckGo's non-JS site.
@@ -408,4 +452,66 @@ export const excavatePrimarySources = async (secondarySources: SearchResult[], a
     const uniqueExcavated = Array.from(new Map(excavatedLinks.map(item => [item.link, item])).values());
     addLog(`[Excavator] Finished excavation. Found ${uniqueExcavated.length} unique primary links.`);
     return uniqueExcavated;
+};
+
+const enrichPubMedResult = async (result: SearchResult, addLog: (msg: string) => void): Promise<SearchResult> => {
+    const pmidMatch = result.link.match(/pubmed\.ncbi\.nlm\.nih\.gov\/(\d+)/);
+    if (!pmidMatch || !pmidMatch[1]) {
+        return result; // Not a standard PubMed link
+    }
+    const pmid = pmidMatch[1];
+    addLog(`[Enricher.PubMed] Found PMID ${pmid}. Fetching details...`);
+    
+    try {
+        const summaryUrl = `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&id=${pmid}&retmode=json`;
+        const summaryResponse = await fetch(summaryUrl); // Direct fetch is usually fine for NCBI API
+        if (!summaryResponse.ok) {
+            throw new Error(`NCBI API summary failed with status ${summaryResponse.status}`);
+        }
+        const summaryData = await summaryResponse.json();
+        const article = summaryData.result[pmid];
+
+        if (article) {
+            const newTitle = article.title || result.title;
+            const newSnippet = `Authors: ${article.authors.map((a: {name: string}) => a.name).join(', ')}. Journal: ${article.source}. PubDate: ${article.pubdate}.`;
+            
+            addLog(`[Enricher.PubMed] Successfully enriched PMID ${pmid} with title: "${newTitle}"`);
+            return {
+                ...result,
+                title: newTitle,
+                snippet: newSnippet,
+            };
+        }
+        return result;
+    } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        addLog(`[Enricher.PubMed] WARN: Failed to enrich PMID ${pmid}: ${message}`);
+        return result; // Return original on failure
+    }
+};
+
+export const enrichSearchResults = async (results: SearchResult[], addLog: (message:string) => void): Promise<SearchResult[]> => {
+    addLog(`[Enricher] Starting enrichment process for ${results.length} results.`);
+    const enrichmentPromises = results.map(async result => {
+        const isPrimary = isPrimarySourceDomain(result.link);
+        // Condition for enrichment: is a primary source AND has a generic/short snippet.
+        const needsEnrichment = isPrimary && (result.snippet.length < 150 || result.snippet.startsWith('Source from'));
+
+        if (!needsEnrichment) {
+            return result;
+        }
+
+        // Specific enrichment logic for PubMed
+        if (result.link.includes('pubmed.ncbi.nlm.nih.gov')) {
+            return enrichPubMedResult(result, addLog);
+        }
+        
+        // Future: Add more generic scrapers here for other domains if needed.
+
+        return result; // Return original if no specific enricher matches
+    });
+
+    const enriched = await Promise.all(enrichmentPromises);
+    addLog(`[Enricher] Enrichment process complete.`);
+    return enriched;
 };

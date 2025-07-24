@@ -1,8 +1,13 @@
 
+export enum ModelProvider {
+    GoogleAI = 'Google AI',
+    Ollama = 'Ollama',
+}
+
 export interface ModelDefinition {
     id: string;
     name: string;
-    provider: 'Google AI';
+    provider: ModelProvider;
 }
 
 export enum AgentType {

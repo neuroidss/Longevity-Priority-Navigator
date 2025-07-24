@@ -15,12 +15,12 @@ const NODE_RADIUS = 30;
 const FONT_SIZE = 10;
 
 // --- Physics Parameters ---
-const REPULSION_STRENGTH = 1200; // Increased to push nodes further apart
-const ATTRACTION_STRENGTH = 0.02; // Decreased to allow for more spread
-const IDEAL_LENGTH_DEFAULT = 320; // Increased for longer links
-const DAMPING = 0.85; // Slightly increased for smoother settling
-const CENTER_GRAVITY = 0.015; // Decreased to reduce central pull
-const CLUSTER_GRAVITY = 0.06; // Significantly decreased to reduce clumping by type
+const REPULSION_STRENGTH = 2500; // Increased to push nodes further apart
+const ATTRACTION_STRENGTH = 0.01; // Decreased to allow for more spread
+const IDEAL_LENGTH_DEFAULT = 400; // Increased for longer links
+const DAMPING = 0.8; // Slightly decreased for faster settling
+const CENTER_GRAVITY = 0.01; // Decreased to reduce central pull
+const CLUSTER_GRAVITY = 0.05; // Kept it low to allow spread
 const SIMULATION_STOP_THRESHOLD = 0.005;
 
 // --- Trend-specific Physics ---

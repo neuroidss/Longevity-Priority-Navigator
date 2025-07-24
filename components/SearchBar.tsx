@@ -1,6 +1,7 @@
 
+
 import React, { useState } from 'react';
-import { AgentType, type ModelDefinition, type AnalysisLens, ContradictionTolerance, SearchDataSource } from '../types';
+import { AgentType, type ModelDefinition, type AnalysisLens, ContradictionTolerance, SearchDataSource, ModelProvider } from '../types';
 import { EXAMPLE_TOPICS, SUPPORTED_MODELS, LENS_DEFINITIONS, DATA_SOURCE_DEFINITIONS } from '../constants';
 import { GearIcon, ChevronDownIcon, NetworkIcon, ClockIcon } from './icons';
 
@@ -17,17 +18,19 @@ interface AgentControlPanelProps {
   setContradictionTolerance: (tolerance: ContradictionTolerance) => void;
   selectedDataSources: SearchDataSource[];
   onDataSourceChange: (sources: SearchDataSource[]) => void;
+  apiCallLimit: number;
+  onApiCallLimitChange: (limit: number) => void;
 }
 
 const AgentControlPanel: React.FC<AgentControlPanelProps> = ({ 
   topic, setTopic, onDispatchAgent, isLoading, model, setModel, 
   apiKey, onApiKeyChange, contradictionTolerance, setContradictionTolerance,
-  selectedDataSources, onDataSourceChange
+  selectedDataSources, onDataSourceChange, apiCallLimit, onApiCallLimitChange
 }) => {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [selectedLens, setSelectedLens] = useState<AnalysisLens>('Balanced');
 
-  const needsApiKey = model.provider === 'Google AI' && !process.env.API_KEY;
+  const needsApiKey = model.provider === ModelProvider.GoogleAI && !process.env.API_KEY;
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
@@ -184,9 +187,21 @@ const AgentControlPanel: React.FC<AgentControlPanelProps> = ({
                 </div>
               </div>
             </div>
+            <div>
+                <label htmlFor="api-limit-input" className="block text-sm font-medium text-slate-300 mb-1">Daily API Call Limit</label>
+                 <input
+                    id="api-limit-input"
+                    type="number"
+                    value={apiCallLimit}
+                    onChange={(e) => onApiCallLimitChange(Math.max(0, parseInt(e.target.value, 10) || 0))}
+                    placeholder="e.g., 50"
+                    className="w-full px-4 py-2 text-sm bg-slate-700 border border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all duration-300 text-white placeholder-slate-400"
+                    disabled={model.provider !== ModelProvider.GoogleAI}
+                />
+            </div>
 
             {needsApiKey && (
-                <div className="md:col-span-1">
+                <div className="md:col-span-2">
                 <label htmlFor="api-key-input" className="block text-sm font-medium text-slate-300 mb-1">Google AI API Key</label>
                 <input
                     id="api-key-input"
@@ -230,6 +245,11 @@ const AgentControlPanel: React.FC<AgentControlPanelProps> = ({
 
             {needsApiKey && (
                 <p className="text-xs text-slate-500 text-center -mt-4">Your key is stored in session storage and is only used to communicate with the Google AI API.</p>
+            )}
+             {model.provider === ModelProvider.Ollama && (
+                <p className="text-xs text-slate-500 text-center -mt-4">
+                    To use Ollama models, ensure the Ollama server is running locally and you have downloaded the model (e.g., `ollama pull llama3`).
+                </p>
             )}
         </div>
       )}

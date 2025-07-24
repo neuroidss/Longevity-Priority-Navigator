@@ -46,22 +46,22 @@ Our goal is to create a tool that helps break free from existing paradigms and s
 
 ## The Agentic Engine: How AI Delivers Insight
 
-The "brain" of the application is a set of carefully engineered system prompts that define two distinct AI agent roles, powered by the Google Gemini API.
+The "brain" of the application is a set of carefully engineered system prompts that define two distinct AI agent roles, powered by the Google Gemini API and local Ollama models.
 
 *   **System Prompts (`services/agentPrompts.ts`)**: This is where the agent's "personality," goals, and constraints are defined. We instruct the model to act as a world-class research strategist, to identify the "chicken-and-egg" problem, and to structure its output in a specific, detailed JSON format.
 *   **Dynamic Agents (`AgentType`)**:
     *   `KnowledgeNavigator`: Scans the current landscape to identify the state-of-the-art, key players, and immediate opportunities.
     *   `TrendAnalyzer`: Takes a historical view, identifying which concepts are gaining momentum and which are fading, providing a strategic "where-to-next" perspective.
 *   **Two-Stage Search & Validation Engine**: The system employs a sophisticated two-stage process to ensure the analytical foundation is built on high-quality scientific evidence.
-    1.  **Stage 1: Broad Discovery**: The system performs parallel searches across multiple providers. It queries specialist databases like PubMed and Google Patents directly, while also using the Gemini `googleSearch` tool to cast a wider net for emerging web content.
-    2.  **Stage 2: AI-Powered Validation**: The combined, raw results from the discovery stage are then passed to a second, specialized AI agent. This "validation agent" acts as an expert scientific librarian, meticulously filtering the list to retain only primary scientific literature (peer-reviewed articles, preprints) and patents. It is explicitly instructed to discard journalistic articles, blog posts, and other secondary sources. This crucial step ensures that the final analysis is grounded in verifiable scientific claims, not popular interpretations.
+    1.  **Stage 1: Broad Discovery & Filtering**: The system performs parallel searches across multiple providers (PubMed, Google Patents, web search, preprint archives). For noisy sources like live preprint feeds or general web search, a specialized AI filter is used to identify relevant documents before they proceed.
+    2.  **Stage 2: AI-Powered Validation & Enrichment**: The combined, filtered results are then passed to a second AI agent. This "validation agent" acts as an expert scientific librarian. It enriches metadata, assesses the reliability of each source, and generates a concise summary of its core claims. This crucial step ensures that the final analysis is grounded in verifiable scientific content, not just popular interpretations.
 
 ## Technical Architecture
 
 The application is a modern, client-side web app built with React and TypeScript.
 
 *   **Frontend**: Built with **React** and **Vite**. The UI is crafted with **Tailwind CSS** for a clean, responsive, and professional design.
-*   **AI Service Layer (`services/geminiService.ts`)**: This is the core communication hub. It uses the `@google/genai` SDK to interact with the Gemini API, handle responses, parse structured JSON, and manage grounding sources.
+*   **AI Service Layer (`services/geminiService.ts`)**: This is the core communication hub. It uses the `@google/genai` SDK and local `fetch` to interact with both Gemini and Ollama APIs. It handles responses, parses structured JSON, and manages the entire agentic workflow.
 *   **State Management**: Application state is managed through a set of cohesive custom React hooks (`useWorkspaceManager`, `useAppSettings`, `useDebugLog`) and persisted in `localStorage` for seamless session continuity. This keeps component logic clean and state management predictable.
 *   **Visualization (`components/KnowledgeGraphView.tsx`)**: The knowledge graph is rendered using **SVG** and a custom, lightweight physics simulation engine. This provides a dynamic, interactive visualization without heavy library dependencies, offering full control over node behavior and styling.
 
@@ -76,14 +76,18 @@ The application is a modern, client-side web app built with React and TypeScript
 
 **Prerequisites:** [Node.js](https://nodejs.org/)
 
-1.  **Install dependencies:**
+1.  **Clone the repository.**
+2.  **Install dependencies:**
     ```bash
     npm install
     ```
-2.  **Set up your environment (Optional, but recommended):**
-    To use the Google Gemini API without entering the key in the browser, provide an `API_KEY` environment variable. If this is not set, you will be prompted to enter your API key in the application's settings panel.
-
-3.  **Run the development server:**
+3.  **Set up your environment (Optional, but recommended):**
+    To use the Google Gemini API without entering the key in the browser, create a `.env` file in the root directory and add your API key:
+    ```
+    VITE_API_KEY=your_google_ai_api_key_here
+    ```
+    If this is not set, you will be prompted to enter your API key in the application's settings panel.
+4.  **Run the development server:**
     ```bash
     npm run dev
     ```

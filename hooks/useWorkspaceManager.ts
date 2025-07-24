@@ -1,7 +1,8 @@
 
+
 import React, { useState, useEffect, useCallback } from 'react';
-import { type WorkspaceState, AgentType, type ChatMessage, type AgentResponse, type KnowledgeGraph, type KnowledgeGraphNode, type AnalysisLens, GroundingSource, SourceStatus, ContradictionTolerance } from '../types';
-import { discoverAndValidateSources, generateAnalysisFromContext } from '../services/geminiService';
+import { type WorkspaceState, AgentType, type ChatMessage, type AgentResponse, type KnowledgeGraph, type KnowledgeGraphNode, type AnalysisLens, GroundingSource, SourceStatus, ContradictionTolerance, ModelProvider } from '../types';
+import { ApiClient } from '../services/geminiService';
 import { useAppSettings } from './useAppSettings'; 
 
 const createWorkspaceState = (
@@ -71,11 +72,12 @@ const sanitizeWorkspaceState = (loadedWorkspace: any): WorkspaceState | null => 
 
 interface WorkspaceManagerProps {
     settings: ReturnType<typeof useAppSettings>;
+    apiClient: ApiClient;
     addLog: (msg: string) => void;
     storageKey: string;
 }
 
-export const useWorkspaceManager = ({ settings, addLog, storageKey }: WorkspaceManagerProps) => {
+export const useWorkspaceManager = ({ settings, apiClient, addLog, storageKey }: WorkspaceManagerProps) => {
     const [topic, setTopic] = useState<string>('');
     const [workspace, setWorkspace] = useState<WorkspaceState | null>(null);
     const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -127,7 +129,7 @@ export const useWorkspaceManager = ({ settings, addLog, storageKey }: WorkspaceM
             setError("Please enter a research topic first.");
             return;
         }
-        if (settings.model.provider === 'Google AI' && !settings.apiKey && !process.env.API_KEY) {
+        if (settings.model.provider === ModelProvider.GoogleAI && !settings.apiKey && !process.env.API_KEY) {
             setError("Please enter your Google AI API Key in the settings to use this model.");
             return;
         }
@@ -150,12 +152,10 @@ export const useWorkspaceManager = ({ settings, addLog, storageKey }: WorkspaceM
         setWorkspace({ ...tempWorkspace });
         
         try {
-            const validatedSources = await discoverAndValidateSources(
+            const validatedSources = await apiClient.discoverAndValidateSources(
                 topic, 
                 settings.model, 
-                addLog, 
-                setLoadingMessage, 
-                settings.apiKey,
+                setLoadingMessage,
                 settings.selectedDataSources
             );
             tempWorkspace.sources = validatedSources;
@@ -167,8 +167,8 @@ export const useWorkspaceManager = ({ settings, addLog, storageKey }: WorkspaceM
 
             // --- Stage 2: Generate Analysis ---
             setLoadingMessage("Synthesizing analysis from primary sources...");
-            const agentResponse = await generateAnalysisFromContext(
-                topic, agentType, settings.model, validatedSources, addLog, settings.apiKey, lens, tolerance
+            const agentResponse = await apiClient.generateAnalysisFromContext(
+                topic, agentType, settings.model, validatedSources, lens, tolerance
             );
             
             // --- Finalize Workspace ---
@@ -197,7 +197,7 @@ export const useWorkspaceManager = ({ settings, addLog, storageKey }: WorkspaceM
             setIsLoading(false);
             setLoadingMessage('');
         }
-    }, [topic, settings, addLog, storageKey]);
+    }, [topic, settings, addLog, storageKey, apiClient]);
 
     return {
         topic,
