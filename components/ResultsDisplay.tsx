@@ -1,14 +1,13 @@
 
-
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { type WorkspaceState, type KnowledgeGraphNode, type ResearchOpportunity, type AnalysisLens, type TrendAnalysis, Contradiction, Synergy, GroundingSource } from '../types';
+import { type WorkspaceState, type KnowledgeGraphNode, type ResearchOpportunity, type AnalysisLens, type TrendAnalysis, Contradiction, Synergy, GroundingSource, SourceStatus, SearchDataSource } from '../types';
 import LoadingSpinner from './LoadingSpinner';
-import { LinkIcon, NetworkIcon, LightbulbIcon, HypothesisIcon, BrainIcon, ClockIcon, ArrowTrendingUpIcon, ArrowTrendingDownIcon, BeakerIcon, ArrowsRightLeftIcon, BuildingLibraryIcon, ShieldCheckIcon, MethodIcon, SynergyIcon, ConflictIcon } from './icons';
+import { LinkIcon, NetworkIcon, LightbulbIcon, HypothesisIcon, BrainIcon, ClockIcon, ArrowTrendingUpIcon, ArrowTrendingDownIcon, BeakerIcon, ArrowsRightLeftIcon, BuildingLibraryIcon, ShieldCheckIcon, MethodIcon, SynergyIcon, ConflictIcon, CheckCircleIcon, XCircleIcon, QuestionMarkCircleIcon, ExclamationTriangleIcon, GoogleIcon, ArticleIcon, PatentIcon, GeneIcon } from './icons';
 import KnowledgeGraphView from './KnowledgeGraphView';
 import AnalysisMeta from './AnalysisMeta';
-import { LENS_DEFINITIONS } from '../constants';
+import { LENS_DEFINITIONS, DATA_SOURCE_DEFINITIONS } from '../constants';
 
-const Citation: React.FC<{ citationText: string; allSources: GroundingSource[] }> = ({ citationText, allSources }) => {
+const Citation: React.FC<{ sources: GroundingSource[]; citationText: string; }> = ({ sources, citationText }) => {
     const [isOpen, setIsOpen] = useState(false);
     const wrapperRef = useRef<HTMLSpanElement>(null);
 
@@ -31,19 +30,27 @@ const Citation: React.FC<{ citationText: string; allSources: GroundingSource[] }
     }, [isOpen]);
 
     const indices = citationText.match(/\d+/g)?.map(n => parseInt(n, 10)) || [];
-    const citationSources = indices.map(index => allSources[index - 1]).filter(Boolean);
+    const citationData = indices.map(index => ({
+        source: sources[index - 1],
+        index
+    })).filter(data => data.source);
 
-    if (citationSources.length === 0) {
+    if (citationData.length === 0) {
         return <span className="text-purple-300 font-bold">{citationText}</span>;
     }
+
+    const isInvalid = citationData.some(d => d.source.status === 'invalid' || d.source.status === 'fetch-failed');
 
     return (
         <span ref={wrapperRef} className="relative inline-block">
             <button
                 onClick={(e) => { e.stopPropagation(); setIsOpen(!isOpen); }}
-                className="text-purple-300 font-bold cursor-pointer hover:underline focus:outline-none focus:ring-2 focus:ring-purple-400/50 rounded-sm"
+                className={`font-bold cursor-pointer hover:underline focus:outline-none focus:ring-2 focus:ring-purple-400/50 rounded-sm
+                    ${isInvalid ? 'text-red-400/90 line-through decoration-red-400/80' : 'text-purple-300'}
+                `}
                 aria-haspopup="true"
                 aria-expanded={isOpen}
+                title={isInvalid ? "This citation refers to a source marked as invalid." : "View source details"}
             >
                 {citationText}
             </button>
@@ -55,7 +62,7 @@ const Citation: React.FC<{ citationText: string; allSources: GroundingSource[] }
                     <button onClick={() => setIsOpen(false)} className="absolute top-1 right-1 p-1 text-slate-500 hover:text-white" aria-label="Close">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                     </button>
-                    {citationSources.map((source, idx) => (
+                    {citationData.map(({ source, index }, idx) => (
                         <a 
                            key={idx} 
                            href={source.uri} 
@@ -63,8 +70,8 @@ const Citation: React.FC<{ citationText: string; allSources: GroundingSource[] }
                            rel="noopener noreferrer" 
                            className="flex items-start gap-2 text-left p-2 rounded hover:bg-slate-800 transition-colors"
                         >
-                           <span className="font-bold text-purple-400 flex-shrink-0">[{indices[idx]}]</span>
-                           <span className="text-slate-300 whitespace-normal">{source.title}</span>
+                           <span className={`font-bold flex-shrink-0 ${(source.status === 'invalid' || source.status === 'fetch-failed') ? 'text-red-400' : 'text-purple-400'}`}>[{index}]</span>
+                           <span className={`text-slate-300 whitespace-normal ${(source.status === 'invalid' || source.status === 'fetch-failed') ? 'line-through text-slate-500' : ''}`}>{source.title}</span>
                         </a>
                     ))}
                 </div>
@@ -94,7 +101,7 @@ export const TextWithCitations: React.FC<{ text: string; sources: GroundingSourc
             const citationParts = part.split(/(\[\s*\d+(?:\s*,\s*\d+)*\s*\])/g);
             return citationParts.map((subPart, j) => {
                 if (/^\[\s*\d/.test(subPart)) {
-                    return <Citation key={`${i}-${j}`} citationText={subPart} allSources={sources} />;
+                    return <Citation key={`${i}-${j}`} citationText={subPart} sources={sources} />;
                 }
                 return <React.Fragment key={`${i}-${j}`}>{subPart}</React.Fragment>;
             });
@@ -392,6 +399,95 @@ const TabButton = ({ label, icon, isActive, onClick, count }: { label: string, i
     </button>
 );
 
+const SourceReliabilityMeter: React.FC<{ reliability: number }> = ({ reliability }) => {
+    const percentage = Math.round(reliability * 100);
+    const getColor = (value: number) => {
+        if (value > 0.75) return { bg: 'bg-green-500', text: 'text-green-300' };
+        if (value > 0.5) return { bg: 'bg-yellow-500', text: 'text-yellow-300' };
+        return { bg: 'bg-red-500', text: 'text-red-300' };
+    };
+    const { bg, text } = getColor(reliability);
+
+    return (
+        <div className="w-full">
+            <div className="flex justify-between text-xs mb-1">
+                <span className={`font-bold ${text}`}>Reliability</span>
+                <span className={text}>{percentage}%</span>
+            </div>
+            <div className="h-1.5 w-full bg-slate-700 rounded-full">
+                <div className={`h-1.5 ${bg} rounded-full`} style={{ width: `${percentage}%` }}></div>
+            </div>
+        </div>
+    );
+};
+
+const SOURCE_BADGE_STYLES: Record<string, { color: string }> = {
+    [SearchDataSource.GoogleSearch]: { color: 'text-blue-400 bg-blue-900/50 border border-blue-700/50' },
+    [SearchDataSource.PubMed]: { color: 'text-green-400 bg-green-900/50 border border-green-700/50' },
+    [SearchDataSource.BioRxivPmcArchive]: { color: 'text-amber-400 bg-amber-900/50 border border-amber-700/50' },
+    [SearchDataSource.BioRxivFeed]: { color: 'text-amber-400 bg-amber-900/50 border border-amber-700/50' },
+    [SearchDataSource.GooglePatents]: { color: 'text-cyan-400 bg-cyan-900/50 border border-cyan-700/50' },
+    [SearchDataSource.OpenGenes]: { color: 'text-purple-400 bg-purple-900/50 border border-purple-700/50' },
+    [SearchDataSource.WebSearch]: { color: 'text-slate-400 bg-slate-700 border border-slate-600' },
+};
+
+const SourceOriginBadge: React.FC<{ origin: SearchDataSource }> = ({ origin }) => {
+    const info = DATA_SOURCE_DEFINITIONS[origin] || { label: 'Unknown', icon: <QuestionMarkCircleIcon className="h-4 w-4" />, description: '' };
+    const style = SOURCE_BADGE_STYLES[origin] || { color: 'text-slate-400 bg-slate-700 border border-slate-600' };
+    return (
+        <div className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-semibold ${style.color}`}>
+            {React.cloneElement(info.icon, { className: 'h-4 w-4' })}
+            <span>{info.label}</span>
+        </div>
+    );
+};
+
+const SourceStats: React.FC<{ sources: GroundingSource[] }> = ({ sources }) => {
+    const stats = useMemo(() => {
+        const acc: Record<string, { valid: number, invalid: number }> = {};
+        for (const source of sources) {
+            const origin = source.origin || 'Unknown';
+            if (!acc[origin]) {
+                acc[origin] = { valid: 0, invalid: 0 };
+            }
+            if (source.status === 'valid' || source.status === 'unverified' || source.status === 'validating') {
+                acc[origin].valid++;
+            } else { // 'invalid' or 'fetch-failed'
+                acc[origin].invalid++;
+            }
+        }
+        return Object.entries(acc).sort((a, b) => (b[1].valid + b[1].invalid) - (a[1].valid + a[1].invalid));
+    }, [sources]);
+
+    if (stats.length === 0) return null;
+
+    return (
+        <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700 mb-6">
+            <h3 className="text-lg font-bold text-slate-200 mb-3">Source Acquisition Summary</h3>
+            <p className="text-xs text-slate-400 mb-4">A statistical overview of where the validated knowledge for this workspace came from, based on your current review.</p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                {stats.map(([origin, data]) => {
+                    const info = DATA_SOURCE_DEFINITIONS[origin as SearchDataSource] || { label: 'Unknown', icon: <QuestionMarkCircleIcon className="h-6 w-6" />, description: '' };
+                    const total = data.valid + data.invalid;
+                    return (
+                        <div key={origin} className="flex items-center gap-3 p-3 bg-slate-700/30 rounded-lg">
+                            <div className="text-slate-400">{React.cloneElement(info.icon, { className: 'h-6 w-6' })}</div>
+                            <div>
+                                <p className="font-bold text-slate-300">{info.label}</p>
+                                <p className="text-xs text-slate-400">
+                                    {total} source{total > 1 ? 's' : ''}
+                                    {data.invalid > 0 && <span className="text-red-400 ml-1">({data.invalid} invalid)</span>}
+                                </p>
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+        </div>
+    );
+};
+
+
 interface WorkspaceViewProps {
   workspace: WorkspaceState | null;
   isLoading: boolean;
@@ -402,30 +498,13 @@ interface WorkspaceViewProps {
   selectedNodeId: string | null;
   activeTab: 'priorities' | 'knowledge_web' | 'sources';
   setActiveTab: React.Dispatch<React.SetStateAction<'priorities' | 'knowledge_web' | 'sources'>>;
+  onManualSourceUpdate: (uri: string, status: SourceStatus) => void;
 }
 
-const WorkspaceView: React.FC<WorkspaceViewProps> = ({ workspace, isLoading, error, hasSearched, loadingMessage, onNodeClick, selectedNodeId, activeTab, setActiveTab }) => {
+const WorkspaceView: React.FC<WorkspaceViewProps> = ({ workspace, isLoading, error, hasSearched, loadingMessage, onNodeClick, selectedNodeId, activeTab, setActiveTab, onManualSourceUpdate }) => {
   const [highlightedNodeIds, setHighlightedNodeIds] = useState<string[] | null>(null);
-  
-  const isTrendAnalysis = !!workspace?.trendAnalysis;
 
-  const hasTextCitations = useMemo(() => {
-    if (!workspace) return false;
-    const textCorpus = [
-      workspace.synthesis,
-      workspace.keyQuestion,
-      ...(workspace.researchOpportunities || []).map(o => o.justification),
-      ...(workspace.contradictions || []).map(c => c.statement),
-      ...(workspace.synergies || []).map(s => s.statement),
-      workspace.trendAnalysis?.summary,
-      ...(Array.isArray(workspace.trendAnalysis?.emergingConcepts) ? workspace.trendAnalysis.emergingConcepts : []).map(c => c.justification),
-      ...(Array.isArray(workspace.trendAnalysis?.fadingConcepts) ? workspace.trendAnalysis.fadingConcepts : []).map(c => c.justification),
-      ...(Array.isArray(workspace.trendAnalysis?.keyShifts) ? workspace.trendAnalysis.keyShifts : []).map(s => s.justification),
-    ].filter(Boolean).join(' ');
-    
-    // Regex to find citations like [1], [1, 2], [1,2, 16]
-    return /\[\s*\d+(?:\s*,\s*\d+)*\s*\]/.test(textCorpus);
-  }, [workspace]);
+  const isTrendAnalysis = !!workspace?.trendAnalysis;
 
   const researchOpportunitiesByLens = useMemo(() => {
     if (!workspace?.researchOpportunities) {
@@ -445,9 +524,19 @@ const WorkspaceView: React.FC<WorkspaceViewProps> = ({ workspace, isLoading, err
     return <LoadingSpinner message={loadingMessage} />;
   }
   
+  const getStatusOpacity = (status: SourceStatus) => {
+      switch(status) {
+          case 'invalid':
+          case 'fetch-failed':
+              return 'opacity-50';
+          default:
+              return 'opacity-100';
+      }
+  };
+  
   return (
     <div className="w-full space-y-4">
-      {isLoading && <div className="fixed top-4 right-4 bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg animate-pulse">Processing...</div>}
+      {isLoading && <div className="fixed top-4 right-4 bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg animate-pulse">{loadingMessage}</div>}
       
       {error && (
         <div className="text-center py-12 text-red-400 bg-red-900/20 border border-red-500 rounded-lg max-w-3xl mx-auto">
@@ -465,10 +554,10 @@ const WorkspaceView: React.FC<WorkspaceViewProps> = ({ workspace, isLoading, err
         </div>
       )}
       
-      {hasSearched && !workspace && !isLoading && !error &&(
+      {hasSearched && !workspace?.knowledgeGraph && !isLoading && !error &&(
         <div className="text-center py-12">
-            <h2 className="text-xl font-semibold text-slate-400">No results found.</h2>
-            <p className="text-slate-500 mt-2">Try a different topic or check the agent logs for errors.</p>
+            <h2 className="text-xl font-semibold text-slate-400">Analysis Incomplete</h2>
+            <p className="text-slate-500 mt-2">The analysis could not be completed. Check the sources tab and logs for errors.</p>
         </div>
       )}
 
@@ -477,7 +566,7 @@ const WorkspaceView: React.FC<WorkspaceViewProps> = ({ workspace, isLoading, err
             <AnalysisMeta workspace={workspace} />
 
             <div className="flex gap-2 sm:gap-4 border-b border-slate-700">
-                {!isTrendAnalysis && (
+                {!isTrendAnalysis && workspace.knowledgeGraph && (
                     <TabButton
                         label="Priorities"
                         icon={<LightbulbIcon className="h-5 w-5" />}
@@ -485,12 +574,14 @@ const WorkspaceView: React.FC<WorkspaceViewProps> = ({ workspace, isLoading, err
                         onClick={() => setActiveTab('priorities')}
                     />
                 )}
-                <TabButton
-                    label={isTrendAnalysis ? "Evolution Analysis" : "Knowledge Web"}
-                    icon={isTrendAnalysis ? <ClockIcon className="h-5 w-5" /> : <NetworkIcon className="h-5 w-5" />}
-                    isActive={activeTab === 'knowledge_web'}
-                    onClick={() => setActiveTab('knowledge_web')}
-                />
+                {workspace.knowledgeGraph && (
+                    <TabButton
+                        label={isTrendAnalysis ? "Evolution Analysis" : "Knowledge Web"}
+                        icon={isTrendAnalysis ? <ClockIcon className="h-5 w-5" /> : <NetworkIcon className="h-5 w-5" />}
+                        isActive={activeTab === 'knowledge_web'}
+                        onClick={() => setActiveTab('knowledge_web')}
+                    />
+                )}
                 <TabButton
                     label="Grounding Sources"
                     icon={<MethodIcon className="h-5 w-5" />}
@@ -501,7 +592,7 @@ const WorkspaceView: React.FC<WorkspaceViewProps> = ({ workspace, isLoading, err
             </div>
 
             <div className="py-4">
-                {activeTab === 'priorities' && !isTrendAnalysis && (
+                {activeTab === 'priorities' && !isTrendAnalysis && workspace.knowledgeGraph && (
                     <div className="space-y-8">
                       {workspace.keyQuestion && (
                         <KeyQuestionCard question={workspace.keyQuestion} sources={workspace.sources} />
@@ -534,7 +625,7 @@ const WorkspaceView: React.FC<WorkspaceViewProps> = ({ workspace, isLoading, err
                     </div>
                 )}
 
-                {activeTab === 'knowledge_web' && (
+                {activeTab === 'knowledge_web' && workspace.knowledgeGraph && (
                     <div className="space-y-8">
                       {isTrendAnalysis && workspace.trendAnalysis && (
                           <TrendAnalysisCard analysis={workspace.trendAnalysis} sources={workspace.sources} />
@@ -602,24 +693,65 @@ const WorkspaceView: React.FC<WorkspaceViewProps> = ({ workspace, isLoading, err
                 )}
 
                 {activeTab === 'sources' && (
-                    <div className="space-y-8">
+                    <div className="space-y-4">
                         {workspace.sources.length > 0 ? (
                             <div>
                                 <h2 className="text-2xl font-bold text-slate-100 mb-4">Grounding Sources ({workspace.sources.length})</h2>
-                                <p className="text-sm text-slate-400 mb-6">The AI agent used the following web pages as its knowledge base to generate the analysis. These are the verifiable sources for the information presented.</p>
-                                <ul className="space-y-2">
+                                <SourceStats sources={workspace.sources} />
+                                <ul className="space-y-3">
                                     {workspace.sources.map((source, index) => (
-                                    <li key={`${source.uri}-${index}`} className="text-sm">
-                                        <a
-                                        href={source.uri}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="inline-flex items-center text-blue-400 hover:text-blue-300 hover:underline transition-colors group"
-                                        >
-                                            <span className="text-xs font-mono bg-slate-700 text-slate-300 rounded px-1.5 py-0.5 mr-2">[{index + 1}]</span>
-                                            <LinkIcon className="h-4 w-4 mr-2 flex-shrink-0" />
-                                            <span className="truncate group-hover:underline">{source.title || source.uri}</span>
-                                        </a>
+                                    <li key={`${source.uri}-${index}`} className={`bg-slate-800/50 p-4 rounded-lg border border-slate-700 transition-opacity duration-300 ${getStatusOpacity(source.status)}`}>
+                                        <div className="flex flex-col sm:flex-row justify-between sm:items-start gap-4">
+                                            <div className="flex-grow min-w-0">
+                                                <div className="flex items-center gap-4 mb-2">
+                                                    <SourceOriginBadge origin={source.origin} />
+                                                    <a
+                                                    href={source.uri}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="inline-flex items-center text-blue-400 hover:text-blue-300 group font-medium"
+                                                    >
+                                                        <LinkIcon className="h-4 w-4 mr-2 flex-shrink-0" />
+                                                        <span className={`group-hover:underline ${source.status === 'invalid' || source.status === 'fetch-failed' ? 'line-through decoration-red-500/70' : ''}`}>{source.title || source.uri}</span>
+                                                    </a>
+                                                </div>
+                                                <p className="text-xs text-slate-500 mt-1 pl-1 break-all">{source.uri}</p>
+                                                {source.status === 'fetch-failed' && (
+                                                    <div className="flex items-center gap-2 text-xs text-amber-400 mt-2 pl-1">
+                                                        <ExclamationTriangleIcon className="h-4 w-4 flex-shrink-0" />
+                                                        <span>{source.reason}</span>
+                                                    </div>
+                                                )}
+                                                {source.status === 'invalid' && source.reason && (
+                                                    <div className="flex items-center gap-2 text-xs text-red-400 mt-2 pl-1">
+                                                        <XCircleIcon className="h-4 w-4 flex-shrink-0" />
+                                                        <span>AI Reason: {source.reason}</span>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            <div className="flex-shrink-0 flex items-center gap-1 bg-slate-700/50 p-1 rounded-full border border-slate-600">
+                                                <button onClick={() => onManualSourceUpdate(source.uri, 'valid')} title="Mark as Valid" className="p-1 rounded-full transition-colors">
+                                                    <CheckCircleIcon className={`h-6 w-6 ${source.status === 'valid' ? 'text-green-500' : 'text-slate-500 hover:text-green-400'}`} />
+                                                </button>
+                                                <button onClick={() => onManualSourceUpdate(source.uri, 'unverified')} title="Mark as Unverified" className="p-1 rounded-full transition-colors">
+                                                    <QuestionMarkCircleIcon className={`h-6 w-6 ${source.status === 'unverified' ? 'text-yellow-500' : 'text-slate-500 hover:text-yellow-400'}`} />
+                                                </button>
+                                                <button onClick={() => onManualSourceUpdate(source.uri, 'invalid')} title="Mark as Invalid" className="p-1 rounded-full transition-colors">
+                                                    <XCircleIcon className={`h-6 w-6 ${source.status === 'invalid' || source.status === 'fetch-failed' ? 'text-red-500' : 'text-slate-500 hover:text-red-400'}`} />
+                                                </button>
+                                            </div>
+                                        </div>
+                                         {typeof source.reliability === 'number' && (
+                                            <div className="mt-4 pt-3 border-t border-slate-700/50 flex flex-col sm:flex-row gap-4 items-start">
+                                                <div className="w-full sm:w-40 flex-shrink-0">
+                                                    <SourceReliabilityMeter reliability={source.reliability} />
+                                                </div>
+                                                <p className="text-xs text-slate-400 flex-grow">
+                                                   <span className="font-bold text-slate-300">AI Justification:</span> {source.reliabilityJustification}
+                                                </p>
+                                            </div>
+                                        )}
                                     </li>
                                     ))}
                                 </ul>
@@ -627,13 +759,10 @@ const WorkspaceView: React.FC<WorkspaceViewProps> = ({ workspace, isLoading, err
                         ) : (
                              <div className="text-center text-slate-400 py-12 px-6 bg-slate-800/50 rounded-lg">
                                 <h3 className="text-xl font-bold text-slate-200">
-                                    {hasTextCitations ? "Inline Citations Found" : "No Grounding Sources Provided"}
+                                    No Grounding Sources Found
                                 </h3>
                                 <p className="mt-2 max-w-2xl mx-auto">
-                                    {hasTextCitations 
-                                        ? "The AI agent included citations in its analysis (e.g., [1], [2]), but did not provide corresponding web links in its structured output. This can occur if sources are from paywalled journals, academic papers not easily accessible online, or part of the model's pre-training data."
-                                        : "The AI did not cite any verifiable grounding sources for this analysis."
-                                    }
+                                   The AI agent could not find any sources for this topic, or they could not be validated.
                                 </p>
                             </div>
                         )}

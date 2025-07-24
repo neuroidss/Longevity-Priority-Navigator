@@ -1,7 +1,6 @@
 
-
 import React, { useState, useEffect } from 'react';
-import { AgentType, type AnalysisLens, type ChatMessage, type KnowledgeGraphNode, type GroundingSource, type WorkspaceState } from './types';
+import { AgentType, type AnalysisLens, type ChatMessage, type KnowledgeGraphNode, type GroundingSource, type WorkspaceState, SourceStatus, ContradictionTolerance } from './types';
 import { chatWithWorkspace } from './services/geminiService';
 import { useAppSettings } from './hooks/useAppSettings';
 import { useWorkspaceManager } from './hooks/useWorkspaceManager';
@@ -30,6 +29,7 @@ interface DashboardProps {
     chatHistory: ChatMessage[];
     isChatting: boolean;
     onSendMessage: (message: string) => void;
+    onManualSourceUpdate: (uri: string, status: SourceStatus) => void;
 }
 
 const Dashboard: React.FC<DashboardProps> = ({
@@ -46,6 +46,7 @@ const Dashboard: React.FC<DashboardProps> = ({
     chatHistory,
     isChatting,
     onSendMessage,
+    onManualSourceUpdate,
 }) => {
     const isGraphFocused = activeTab === 'knowledge_web';
     const isWorkspaceReady = !!workspace && !!workspace.knowledgeGraph;
@@ -64,6 +65,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                     selectedNodeId={selectedNode?.id || null}
                     activeTab={activeTab}
                     setActiveTab={setActiveTab}
+                    onManualSourceUpdate={onManualSourceUpdate}
                 />
             </div>
             <div className="lg:col-span-1 lg:sticky lg:top-8">
@@ -86,9 +88,12 @@ const App: React.FC = () => {
     // --- State Management using Hooks ---
     const { logs, addLog, handleResetProgress } = useDebugLog(APP_STATE_STORAGE_KEY);
     const settings = useAppSettings(addLog, APP_STATE_STORAGE_KEY);
-    const { model, setModel, apiKey, setApiKey } = settings;
     const { 
-      topic, setTopic, workspace, isLoading, loadingMessage, 
+      model, setModel, apiKey, setApiKey, contradictionTolerance, 
+      setContradictionTolerance, selectedDataSources, setSelectedDataSources 
+    } = settings;
+    const { 
+      topic, setTopic, workspace, setWorkspace, isLoading, loadingMessage, 
       error, hasSearched, handleDispatchAgent 
     } = useWorkspaceManager({ settings, addLog, storageKey: APP_STATE_STORAGE_KEY });
     
@@ -96,11 +101,10 @@ const App: React.FC = () => {
     const [isChatting, setIsChatting] = useState(false);
     const [selectedNode, setSelectedNode] = useState<KnowledgeGraphNode | null>(null);
     const [activeTab, setActiveTab] = useState<'priorities' | 'knowledge_web' | 'sources'>('priorities');
-
+    
     // --- Effects ---
     useEffect(() => {
         addLog("Initializing application...");
-        // Restore chat history from local storage
         try {
             const savedStateJSON = localStorage.getItem(APP_STATE_STORAGE_KEY);
             if (savedStateJSON) {
@@ -118,11 +122,23 @@ const App: React.FC = () => {
         }
     }, [addLog, workspace?.trendAnalysis]);
 
+    const saveStateToLocalStorage = (ws: WorkspaceState | null, ch: ChatMessage[], ct: ContradictionTolerance) => {
+        const currentState = JSON.parse(localStorage.getItem(APP_STATE_STORAGE_KEY) || '{}');
+        const stateToSave = {
+            ...currentState,
+            workspace: ws,
+            chatHistory: ch,
+            contradictionTolerance: ct,
+            selectedDataSources,
+        };
+        localStorage.setItem(APP_STATE_STORAGE_KEY, JSON.stringify(stateToSave));
+    };
+
     // --- Handlers ---
     const handleSendMessage = async (message: string) => {
         if (!message.trim() || !workspace) return;
         
-        setSelectedNode(null); // Clear selected node on send
+        setSelectedNode(null);
 
         const newUserMessage: ChatMessage = { id: `user-${Date.now()}`, sender: 'user', text: message };
         const aiLoadingMessage: ChatMessage = { id: `ai-${Date.now()}`, sender: 'ai', text: '', isLoading: true };
@@ -137,12 +153,7 @@ const App: React.FC = () => {
             
             const finalHistory = newHistory.map(msg => msg.id === aiLoadingMessage.id ? finalAiMessage : msg);
             setChatHistory(finalHistory);
-            
-            const currentState = JSON.parse(localStorage.getItem(APP_STATE_STORAGE_KEY) || '{}');
-            localStorage.setItem(APP_STATE_STORAGE_KEY, JSON.stringify({
-                ...currentState,
-                chatHistory: finalHistory,
-            }));
+            saveStateToLocalStorage(workspace, finalHistory, contradictionTolerance);
 
         } catch (e) {
             const errorText = e instanceof Error ? e.message : "An unknown error occurred.";
@@ -154,6 +165,20 @@ const App: React.FC = () => {
         }
     };
     
+    const handleManualSourceUpdate = (sourceUri: string, newStatus: SourceStatus) => {
+        if (!workspace) return;
+        const newSources = workspace.sources.map(s => 
+            s.uri === sourceUri ? { ...s, status: newStatus, reason: newStatus === 'unverified' ? undefined : s.reason } : s
+        );
+        const newWorkspace = { ...workspace, sources: newSources };
+        setWorkspace(newWorkspace);
+        saveStateToLocalStorage(newWorkspace, chatHistory, contradictionTolerance);
+    };
+    
+    const handleDispatchWrapper = (lens: AnalysisLens, agentType: AgentType, tolerance: ContradictionTolerance) => {
+        handleDispatchAgent(lens, agentType, tolerance, setActiveTab, setChatHistory, setSelectedNode);
+    }
+
     return (
         <main className="min-h-screen text-slate-200">
             <div className="container mx-auto px-4 py-8">
@@ -161,12 +186,16 @@ const App: React.FC = () => {
                 <AgentControlPanel
                     topic={topic}
                     setTopic={setTopic}
-                    onDispatchAgent={(lens, agentType) => handleDispatchAgent(lens, agentType, setActiveTab, setChatHistory, setSelectedNode)}
+                    onDispatchAgent={handleDispatchWrapper}
                     isLoading={isLoading || isChatting}
                     model={model}
                     setModel={setModel}
                     apiKey={apiKey}
                     onApiKeyChange={setApiKey}
+                    contradictionTolerance={contradictionTolerance}
+                    setContradictionTolerance={setContradictionTolerance}
+                    selectedDataSources={selectedDataSources}
+                    onDataSourceChange={setSelectedDataSources}
                 />
                 <Dashboard
                     activeTab={activeTab}
@@ -182,6 +211,7 @@ const App: React.FC = () => {
                     chatHistory={chatHistory}
                     isChatting={isChatting}
                     onSendMessage={handleSendMessage}
+                    onManualSourceUpdate={handleManualSourceUpdate}
                 />
                 <Footer />
             </div>

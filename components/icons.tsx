@@ -1,4 +1,5 @@
 
+
 import React from 'react';
 
 export const ArticleIcon = () => (
@@ -158,5 +159,41 @@ export const SynergyIcon = ({className="h-5 w-5"}) => (
 export const ConflictIcon = ({className="h-5 w-5"}) => (
     <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
         <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+    </svg>
+);
+
+export const CheckCircleIcon = ({className = "h-5 w-5"}) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+);
+
+export const XCircleIcon = ({className = "h-5 w-5"}) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+);
+
+export const QuestionMarkCircleIcon = ({className = "h-5 w-5"}) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+);
+
+export const ExclamationTriangleIcon = ({className = "h-5 w-5"}) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+    </svg>
+);
+
+export const GoogleIcon = ({className = "h-4 w-4"}) => (
+    <svg className={className} role="img" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><title>Google</title><path d="M12.48 10.92v3.28h7.84c-.24 1.84-.85 3.18-1.73 4.1-1.02 1.02-2.9 2.2-5.94 2.2-4.46 0-8.12-3.64-8.12-8.12s3.66-8.12 8.12-8.12c2.6 0 4.2.98 5.2 2.02l2.6-2.6C16.8.66 14.56 0 12.48 0 5.88 0 .04 5.8 0 12.92s5.84 12.92 12.48 12.92c6.92 0 12.04-4.8 12.04-12.52 0-.8-.08-1.6-.2-2.32H12.48z"/></svg>
+);
+
+export const WebIcon = ({className = "h-5 w-5"}) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3.737 8.358a17.93 17.93 0 0 1 16.526 0M4.03 15.642a17.65 17.65 0 0 1 15.94 0" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 21a9 9 0 0 0 0-18m0 18a9.003 9.003 0 0 0 8.046-4.91M3.954 16.09a9.003 9.003 0 0 0 8.046 4.91m0-18a9.003 9.003 0 0 0-8.046 4.91" />
     </svg>
 );

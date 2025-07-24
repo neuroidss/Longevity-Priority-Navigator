@@ -1,5 +1,4 @@
 
-
 export interface ModelDefinition {
     id: string;
     name: string;
@@ -9,13 +8,23 @@ export interface ModelDefinition {
 export enum AgentType {
     KnowledgeNavigator = "KnowledgeNavigator",
     TrendAnalyzer = "TrendAnalyzer",
+    SourceFinder = "SourceFinder",
 }
 
+export type ContradictionTolerance = 'Low' | 'Medium' | 'High';
 export type AnalysisLens = 'Balanced' | 'High-Risk/High-Reward' | 'Clinical Translation' | 'Biomarker Discovery' | 'Fundamental Mechanisms';
+
+export type SourceStatus = 'unverified' | 'valid' | 'invalid' | 'validating' | 'fetch-failed';
 
 export interface GroundingSource {
     uri: string;
     title: string;
+    status: SourceStatus;
+    origin: SearchDataSource;
+    content?: string;
+    reliability?: number; // 0.0 to 1.0, assessed by AI
+    reliabilityJustification?: string; // AI's reason for the score
+    reason?: string; // Reason for status (e.g., fetch failure, invalid)
 }
 
 export interface KnowledgeGraphNode {
@@ -94,7 +103,6 @@ export interface WorkspaceState {
 }
 
 export interface AgentResponse {
-  sources?: GroundingSource[];
   knowledgeGraph?: KnowledgeGraph;
   synthesis?: string;
   researchOpportunities?: ResearchOpportunity[];
@@ -109,4 +117,54 @@ export interface ChatMessage {
     sender: 'user' | 'ai';
     text: string;
     isLoading?: boolean;
+}
+
+export interface ValidatedSource {
+    uri: string;
+    status: 'valid' | 'invalid';
+    reason: string;
+}
+
+export enum SearchDataSource {
+    GoogleSearch = 'GoogleSearch',
+    WebSearch = 'WebSearch',
+    PubMed = 'PubMed',
+    BioRxivFeed = 'BioRxivFeed',
+    BioRxivPmcArchive = 'BioRxivPmcArchive',
+    GooglePatents = 'GooglePatents',
+    OpenGenes = 'OpenGenes',
+}
+
+export interface SearchResult {
+    title: string;
+    link: string;
+    snippet: string;
+    source: SearchDataSource;
+}
+
+export interface GeneSearchedRecord {
+    id: number;
+    symbol: string;
+    name: string;
+    researches?: {
+        increaseLifespan?: {
+            modelOrganism: string;
+            interventionResultForLifespan: string;
+            lifespanMeanChangePercent?: number;
+            lifespanMinChangePercent?: number;
+            lifespanMaxChangePercent?: number;
+            interventions?: {
+                controlAndExperiment: any[],
+                experiment: {
+                    interventionMethod: string;
+                }[]
+            };
+        }[];
+    };
+    agingMechanisms?: { name: string; }[];
+}
+
+export interface OpenGeneSearchResponse {
+    options: any;
+    items: GeneSearchedRecord[];
 }

@@ -52,7 +52,9 @@ The "brain" of the application is a set of carefully engineered system prompts t
 *   **Dynamic Agents (`AgentType`)**:
     *   `KnowledgeNavigator`: Scans the current landscape to identify the state-of-the-art, key players, and immediate opportunities.
     *   `TrendAnalyzer`: Takes a historical view, identifying which concepts are gaining momentum and which are fading, providing a strategic "where-to-next" perspective.
-*   **Search Grounding**: We leverage Google Search grounding (`tools: [{ googleSearch: {} }]`) to provide the agents with up-to-date, real-world context from the latest scientific literature, pre-prints, and patents, ensuring the analysis is current and relevant.
+*   **Two-Stage Search & Validation Engine**: The system employs a sophisticated two-stage process to ensure the analytical foundation is built on high-quality scientific evidence.
+    1.  **Stage 1: Broad Discovery**: The system performs parallel searches across multiple providers. It queries specialist databases like PubMed and Google Patents directly, while also using the Gemini `googleSearch` tool to cast a wider net for emerging web content.
+    2.  **Stage 2: AI-Powered Validation**: The combined, raw results from the discovery stage are then passed to a second, specialized AI agent. This "validation agent" acts as an expert scientific librarian, meticulously filtering the list to retain only primary scientific literature (peer-reviewed articles, preprints) and patents. It is explicitly instructed to discard journalistic articles, blog posts, and other secondary sources. This crucial step ensures that the final analysis is grounded in verifiable scientific claims, not popular interpretations.
 
 ## Technical Architecture
 

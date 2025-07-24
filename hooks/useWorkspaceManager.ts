@@ -1,90 +1,18 @@
 
-
 import React, { useState, useEffect, useCallback } from 'react';
-import { type WorkspaceState, AgentType, type ChatMessage, type AgentResponse, type KnowledgeGraph, type KnowledgeGraphNode, type AnalysisLens } from '../types';
-import { dispatchAgent } from '../services/geminiService';
+import { type WorkspaceState, AgentType, type ChatMessage, type AgentResponse, type KnowledgeGraph, type KnowledgeGraphNode, type AnalysisLens, GroundingSource, SourceStatus, ContradictionTolerance } from '../types';
+import { discoverAndValidateSources, generateAnalysisFromContext } from '../services/geminiService';
 import { useAppSettings } from './useAppSettings'; 
 
-const FEATURED_ANALYSIS: WorkspaceState = {
-    topic: "AI-driven longevity research prioritization",
-    sources: [
-        { uri: 'https://raw.githubusercontent.com/neuroidss/Longevity-Priority-Navigator/main/Tarkhov_AI_for_Longevity.md', title: 'Presentation: Can Artificial Intelligence Help Us Defeat Aging? (Andrey Tarkhov)' },
-        { uri: 'https://raw.githubusercontent.com/neuroidss/Longevity-Priority-Navigator/main/Salimov_AI_System_for_Longevity.md', title: 'Presentation: Using AI to Accelerate Longevity Research (Danil Salimov)' }
-    ],
-    knowledgeGraph: {
-        nodes: [
-            { id: 'ai-system', label: 'AI Prioritization System', type: 'Topic', x: 460, y: 220 },
-            { id: 'kg', label: 'Knowledge Graph', type: 'Method', x: 720, y: 280 },
-            { id: 'biomarkers', label: 'Noisy Biomarkers', type: 'KnowledgeGap', x: 680, y: 180 },
-            { id: 'interventions', label: 'Weak Interventions', type: 'KnowledgeGap', x: 620, y: 360 },
-            { id: 'translation', label: 'Translational Gap', type: 'KnowledgeGap', x: 350, y: 450 },
-            { id: 'sglt2-glp1', label: 'SGLT2/GLP1 Drugs', type: 'Compound', x: 250, y: 200 },
-            { id: 'all-cause-mortality', label: 'Reduced Mortality', type: 'Result', x: 250, y: 380 },
-            { id: 'senescence', label: 'Cellular Senescence', type: 'Process', x: 460, y: 500 },
-            { id: 'invitro-screening', label: 'In-vitro Screening', type: 'Method', x: 600, y: 480 }
-        ],
-        edges: [
-            { source: 'ai-system', target: 'kg', label: 'builds' },
-            { source: 'ai-system', target: 'biomarkers', label: 'addresses' },
-            { source: 'ai-system', target: 'interventions', label: 'evaluates' },
-            { source: 'kg', target: 'translation', label: 'bridges' },
-            { source: 'biomarkers', target: 'interventions', label: 'limits validation of' },
-            { source: 'sglt2-glp1', target: 'all-cause-mortality', label: 'leads to' },
-            { source: 'ai-system', target: 'sglt2-glp1', label: 'analyzes' },
-            { source: 'invitro-screening', target: 'translation', label: 'suffers from' },
-            { source: 'senescence', target: 'interventions', label: 'is target for' },
-        ]
-    },
-    synthesis: `### Current Landscape
-The longevity field faces a "chicken-and-egg" dilemma: we need better biomarkers to validate interventions, but we need effective interventions to discover sensitive biomarkers [1]. Current strategies range from high-throughput in-vitro screens to analyzing existing FDA-approved drugs like SGLT2 inhibitors which have shown promising signals in reducing all-cause mortality [1].
-
-### Key Challenges (Translational Gaps & Biomarker Noise)
-The primary hurdles are translating findings from model organisms to humans and the high noise-to-signal ratio in aging biomarkers. This makes it difficult to assess the true impact of any intervention [1].
-
-### Strategic Implications
-An AI-driven system can break this deadlock by creating a dynamic knowledge graph that integrates multi-modal data (genomics, clinical, patents). This allows for the identification of conserved pathways, robust biomarker candidates, and the prioritization of research directions that have the highest probability of translating to humans [2].`,
-    researchOpportunities: [
-        {
-            id: 'ro-1',
-            title: 'Develop a "Chicken-and-Egg Breaker": Co-develop interventions with biomarkers',
-            justification: 'Instead of sequential development, this approach uses AI to simultaneously screen for compounds that induce a rejuvenation signal in-vitro AND identify the most sensitive transcriptomic or proteomic features that report on that signal [1, 2]. This creates a paired intervention-biomarker system from the start.',
-            relatedNodeIds: ['biomarkers', 'interventions', 'invitro-screening'],
-            lens: 'High-Risk/High-Reward',
-            confidence: 0.85,
-            maturity: 'Basic Research',
-            potentialImpact: 'Establishes a new paradigm for drug discovery in aging, bypassing the traditional biomarker bottleneck.'
-        },
-        {
-            id: 'ro-2',
-            title: 'Validate SGLT2/GLP1 as Anti-Aging Drugs via Novel Biomarker Discovery',
-            justification: "Current data shows these drugs reduce all-cause mortality, but the 'pro-longevity' mechanisms are unclear. This research would use multi-omics data from patients on these drugs to identify novel, upstream biomarkers of their effects, moving beyond standard clinical markers to find true signatures of slowed aging [1].",
-            relatedNodeIds: ['sglt2-glp1', 'all-cause-mortality', 'biomarkers'],
-            lens: 'Clinical Translation',
-            confidence: 0.9,
-            maturity: 'Translational',
-            potentialImpact: 'Could provide the first clinically-validated, molecular biomarkers of a human anti-aging intervention.'
-        }
-    ],
-    contradictions: [
-        { id: 'con-1', statement: "High-throughput in-vitro screens often identify compounds with high toxicity or off-target effects (e.g., PAINS) that fail in subsequent in-vivo validation [1]." },
-    ],
-    synergies: [
-        { id: 'syn-1', statement: "The observed all-cause mortality reduction from SGLT2 inhibitors (a clinical result) could be mechanistically linked to fundamental processes like cellular senescence, providing a bridge between clinical outcomes and basic science [1]." }
-    ],
-    keyQuestion: "How can we systematically distinguish genuine anti-aging effects from disease-specific treatments in human data? [1]",
-    trendAnalysis: null,
-    timestamp: 0 // Will be updated on load
-};
-
-// Logic from workspaceUtils.ts and App.tsx moved here
 const createWorkspaceState = (
     currentTopic: string,
+    validatedSources: GroundingSource[],
     agentResponse: AgentResponse | null
 ): WorkspaceState => {
     if (!agentResponse) {
         return { 
             topic: currentTopic, 
-            sources: [], 
+            sources: validatedSources, 
             knowledgeGraph: null, 
             synthesis: null,
             researchOpportunities: [],
@@ -96,12 +24,10 @@ const createWorkspaceState = (
         };
     }
     
-    const newGraph: KnowledgeGraph | null = agentResponse.knowledgeGraph || null;
-
     return {
         topic: currentTopic,
-        sources: agentResponse.sources || [],
-        knowledgeGraph: newGraph,
+        sources: validatedSources,
+        knowledgeGraph: agentResponse.knowledgeGraph || null,
         synthesis: agentResponse.synthesis || null,
         researchOpportunities: agentResponse.researchOpportunities || [],
         contradictions: agentResponse.contradictions || [],
@@ -112,19 +38,25 @@ const createWorkspaceState = (
     };
 };
 
-/**
- * Sanitizes a workspace object loaded from localStorage to ensure it conforms to the
- * current WorkspaceState interface, preventing crashes from outdated schemas.
- */
 const sanitizeWorkspaceState = (loadedWorkspace: any): WorkspaceState | null => {
     if (!loadedWorkspace || typeof loadedWorkspace !== 'object' || !loadedWorkspace.topic) {
         return null;
     }
     
-    // Ensure all array properties exist and are arrays to prevent .length errors.
     return {
         topic: loadedWorkspace.topic,
-        sources: Array.isArray(loadedWorkspace.sources) ? loadedWorkspace.sources : [],
+        sources: Array.isArray(loadedWorkspace.sources) 
+            ? loadedWorkspace.sources.map((s: any) => ({
+                uri: s.uri,
+                title: s.title,
+                status: s.status || 'unverified',
+                origin: s.origin,
+                reason: s.reason,
+                content: s.content,
+                reliability: s.reliability,
+                reliabilityJustification: s.reliabilityJustification,
+            })) 
+            : [],
         knowledgeGraph: loadedWorkspace.knowledgeGraph || null,
         synthesis: loadedWorkspace.synthesis || null,
         researchOpportunities: Array.isArray(loadedWorkspace.researchOpportunities) ? loadedWorkspace.researchOpportunities : [],
@@ -132,7 +64,7 @@ const sanitizeWorkspaceState = (loadedWorkspace: any): WorkspaceState | null => 
         synergies: Array.isArray(loadedWorkspace.synergies) ? loadedWorkspace.synergies : [],
         keyQuestion: loadedWorkspace.keyQuestion || null,
         trendAnalysis: loadedWorkspace.trendAnalysis || null,
-        timestamp: loadedWorkspace.timestamp || Date.now()
+        timestamp: loadedWorkspace.timestamp || Date.now(),
     };
 };
 
@@ -153,18 +85,10 @@ export const useWorkspaceManager = ({ settings, addLog, storageKey }: WorkspaceM
 
     useEffect(() => {
         const loadInitialState = () => {
-            addLog("No valid state found. Loading featured analysis showcase.");
-            const initialWorkspace = { ...FEATURED_ANALYSIS, timestamp: Date.now() };
-            setTopic(initialWorkspace.topic);
-            setWorkspace(initialWorkspace);
-            setHasSearched(true);
-            localStorage.setItem(storageKey, JSON.stringify({
-                topic: initialWorkspace.topic,
-                workspace: initialWorkspace,
-                hasSearched: true,
-                chatHistory: [],
-                model: settings.model
-            }));
+            addLog("No valid state found. Starting with a clean slate.");
+            setTopic('');
+            setWorkspace(null);
+            setHasSearched(false);
         };
 
         try {
@@ -176,16 +100,16 @@ export const useWorkspaceManager = ({ settings, addLog, storageKey }: WorkspaceM
                 if (sanitizedWorkspace) {
                     setTopic(sanitizedWorkspace.topic);
                     setWorkspace(sanitizedWorkspace);
-                    setHasSearched(savedState.hasSearched || true);
+                    setHasSearched(!!savedState.hasSearched);
                     addLog("Successfully restored and validated workspace state from previous session.");
                 } else {
-                    throw new Error("Saved workspace state is invalid or outdated.");
+                    loadInitialState();
                 }
             } else {
                 loadInitialState();
             }
         } catch (e) {
-            addLog(`WARN: Loading from localStorage failed (${e instanceof Error ? e.message : 'Unknown error'}). Clearing old data and loading fresh state.`);
+            addLog(`WARN: Loading from localStorage failed (${e instanceof Error ? e.message : 'Unknown error'}). Clearing old data and starting fresh.`);
             localStorage.removeItem(storageKey);
             loadInitialState();
         }
@@ -193,7 +117,8 @@ export const useWorkspaceManager = ({ settings, addLog, storageKey }: WorkspaceM
 
     const handleDispatchAgent = useCallback(async (
         lens: AnalysisLens, 
-        agentType: AgentType, 
+        agentType: AgentType,
+        tolerance: ContradictionTolerance,
         setActiveTab: React.Dispatch<React.SetStateAction<'priorities' | 'knowledge_web' | 'sources'>>,
         setChatHistory: React.Dispatch<React.SetStateAction<ChatMessage[]>>, 
         setSelectedNode: React.Dispatch<React.SetStateAction<KnowledgeGraphNode | null>>
@@ -206,53 +131,73 @@ export const useWorkspaceManager = ({ settings, addLog, storageKey }: WorkspaceM
             setError("Please enter your Google AI API Key in the settings to use this model.");
             return;
         }
+        if (settings.selectedDataSources.length === 0) {
+            setError("Please select at least one data source in the Advanced Settings.");
+            return;
+        }
 
         setIsLoading(true);
         setError(null);
-        setWorkspace(null);
-        setChatHistory([]); // Clear previous chat
-        setSelectedNode(null); // Clear selected node
-        setLoadingMessage(`Dispatching ${agentType} with ${lens} lens...`);
-        addLog(`Dispatching agent '${agentType}' for topic: "${topic}" with lens: "${lens}"`);
+        setChatHistory([]);
+        setSelectedNode(null);
+        setActiveTab('sources');
+        setHasSearched(true); // Indicate that a search has been initiated
 
+        let tempWorkspace: WorkspaceState = {
+            topic, sources: [], knowledgeGraph: null, synthesis: null, researchOpportunities: [],
+            contradictions: [], synergies: [], keyQuestion: null, trendAnalysis: null, timestamp: Date.now()
+        };
+        setWorkspace({ ...tempWorkspace });
+        
         try {
-            const response = await dispatchAgent(
-                topic, agentType, settings.model, addLog, settings.apiKey, setLoadingMessage, lens
+            const validatedSources = await discoverAndValidateSources(
+                topic, 
+                settings.model, 
+                addLog, 
+                setLoadingMessage, 
+                settings.apiKey,
+                settings.selectedDataSources
             );
-            addLog(`Agent '${agentType}' finished.`);
-
-            const newWorkspace = createWorkspaceState(topic, response);
-            setWorkspace(newWorkspace);
-            setHasSearched(true);
+            tempWorkspace.sources = validatedSources;
+            setWorkspace({ ...tempWorkspace });
             
-            if (agentType === AgentType.TrendAnalyzer) {
-                setActiveTab('knowledge_web');
-            } else {
-                setActiveTab('priorities');
+            if (validatedSources.length === 0) {
+                throw new Error("The AI agent could not find and validate any sources for the topic.");
             }
-            
-            const initialChatHistory: ChatMessage[] = [];
-            setChatHistory(initialChatHistory);
 
-            // Save state after successful operation
-            localStorage.setItem(storageKey, JSON.stringify({
+            // --- Stage 2: Generate Analysis ---
+            setLoadingMessage("Synthesizing analysis from primary sources...");
+            const agentResponse = await generateAnalysisFromContext(
+                topic, agentType, settings.model, validatedSources, addLog, settings.apiKey, lens, tolerance
+            );
+            
+            // --- Finalize Workspace ---
+            const finalWorkspace = createWorkspaceState(topic, validatedSources, agentResponse);
+            setWorkspace(finalWorkspace);
+            setActiveTab(agentType === AgentType.TrendAnalyzer ? 'knowledge_web' : 'priorities');
+            
+            const stateToSave = {
                 topic,
-                workspace: newWorkspace,
+                workspace: finalWorkspace,
                 hasSearched: true,
-                chatHistory: initialChatHistory,
-                model: settings.model
-            }));
+                chatHistory: [],
+                model: settings.model,
+                contradictionTolerance: tolerance,
+                selectedDataSources: settings.selectedDataSources,
+            };
+
+            localStorage.setItem(storageKey, JSON.stringify(stateToSave));
 
         } catch (e) {
             const message = e instanceof Error ? e.message : 'An unknown error occurred.';
             setError(message);
             addLog(`ERROR during agent dispatch: ${message}`);
+            setWorkspace(tempWorkspace); // Show the partially completed workspace on error
         } finally {
             setIsLoading(false);
             setLoadingMessage('');
         }
     }, [topic, settings, addLog, storageKey]);
-
 
     return {
         topic,
