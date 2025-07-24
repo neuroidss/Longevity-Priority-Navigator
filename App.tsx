@@ -1,10 +1,7 @@
 
 
-
-
-
 import React, { useState, useEffect } from 'react';
-import { AgentType, type AnalysisLens, type ChatMessage, type KnowledgeGraphNode } from './types';
+import { AgentType, type AnalysisLens, type ChatMessage, type KnowledgeGraphNode, type GroundingSource, type WorkspaceState } from './types';
 import { chatWithWorkspace } from './services/geminiService';
 import { useAppSettings } from './hooks/useAppSettings';
 import { useWorkspaceManager } from './hooks/useWorkspaceManager';
@@ -18,6 +15,72 @@ import ChatView from './components/ChatView';
 import Footer from './components/Footer';
 
 const APP_STATE_STORAGE_KEY = 'longevityKnowledgeGraphState';
+
+interface DashboardProps {
+    activeTab: 'priorities' | 'knowledge_web' | 'sources';
+    setActiveTab: React.Dispatch<React.SetStateAction<'priorities' | 'knowledge_web' | 'sources'>>;
+    workspace: WorkspaceState | null;
+    isLoading: boolean;
+    error: string | null;
+    hasSearched: boolean;
+    loadingMessage: string;
+    onNodeClick: (node: KnowledgeGraphNode) => void;
+    selectedNode: KnowledgeGraphNode | null;
+    onClearSelectedNode: () => void;
+    chatHistory: ChatMessage[];
+    isChatting: boolean;
+    onSendMessage: (message: string) => void;
+}
+
+const Dashboard: React.FC<DashboardProps> = ({
+    activeTab,
+    setActiveTab,
+    workspace,
+    isLoading,
+    error,
+    hasSearched,
+    loadingMessage,
+    onNodeClick,
+    selectedNode,
+    onClearSelectedNode,
+    chatHistory,
+    isChatting,
+    onSendMessage,
+}) => {
+    const isGraphFocused = activeTab === 'knowledge_web';
+    const isWorkspaceReady = !!workspace && !!workspace.knowledgeGraph;
+    const sources = workspace?.sources || [];
+
+    return (
+        <div className={`grid grid-cols-1 ${isGraphFocused ? 'lg:grid-cols-3' : 'lg:grid-cols-2'} gap-8 mt-8 items-start`}>
+            <div className={`${isGraphFocused ? 'lg:col-span-2' : 'lg:col-span-1'} flex flex-col gap-8`}>
+                <WorkspaceView
+                    workspace={workspace}
+                    isLoading={isLoading}
+                    error={error}
+                    hasSearched={hasSearched}
+                    loadingMessage={loadingMessage}
+                    onNodeClick={onNodeClick}
+                    selectedNodeId={selectedNode?.id || null}
+                    activeTab={activeTab}
+                    setActiveTab={setActiveTab}
+                />
+            </div>
+            <div className="lg:col-span-1 lg:sticky lg:top-8">
+                 <ChatView
+                    chatHistory={chatHistory}
+                    isChatting={isChatting}
+                    onSendMessage={onSendMessage}
+                    isWorkspaceReady={isWorkspaceReady}
+                    selectedNode={selectedNode}
+                    onClearSelectedNode={onClearSelectedNode}
+                    sources={sources}
+                />
+            </div>
+        </div>
+    );
+};
+
 
 const App: React.FC = () => {
     // --- State Management using Hooks ---
@@ -46,11 +109,14 @@ const App: React.FC = () => {
                     setChatHistory(savedState.chatHistory);
                     addLog("Restored chat history.");
                 }
+                 if(workspace?.trendAnalysis) {
+                    setActiveTab('knowledge_web');
+                }
             }
         } catch (e) {
              addLog(`Could not restore chat history: ${e instanceof Error ? e.message : String(e)}`);
         }
-    }, [addLog]);
+    }, [addLog, workspace?.trendAnalysis]);
 
     // --- Handlers ---
     const handleSendMessage = async (message: string) => {
@@ -88,39 +154,6 @@ const App: React.FC = () => {
         }
     };
     
-    const Dashboard = () => {
-        const isGraphFocused = activeTab === 'knowledge_web';
-
-        return (
-            <div className={`grid grid-cols-1 ${isGraphFocused ? 'lg:grid-cols-3' : 'lg:grid-cols-2'} gap-8 mt-8 items-start`}>
-                <div className={`${isGraphFocused ? 'lg:col-span-2' : 'lg:col-span-1'} flex flex-col gap-8`}>
-                    <WorkspaceView
-                        workspace={workspace}
-                        isLoading={isLoading}
-                        error={error}
-                        hasSearched={hasSearched}
-                        loadingMessage={loadingMessage}
-                        onNodeClick={(node) => setSelectedNode(node)}
-                        selectedNodeId={selectedNode?.id || null}
-                        activeTab={activeTab}
-                        setActiveTab={setActiveTab}
-                    />
-                </div>
-                <div className="lg:col-span-1 lg:sticky lg:top-8">
-                     <ChatView
-                        chatHistory={chatHistory}
-                        isChatting={isChatting}
-                        onSendMessage={handleSendMessage}
-                        isWorkspaceReady={!!workspace && !!workspace.knowledgeGraph}
-                        selectedNode={selectedNode}
-                        onClearSelectedNode={() => setSelectedNode(null)}
-                        sources={workspace?.sources || []}
-                    />
-                </div>
-            </div>
-        );
-    };
-
     return (
         <main className="min-h-screen text-slate-200">
             <div className="container mx-auto px-4 py-8">
@@ -135,7 +168,21 @@ const App: React.FC = () => {
                     apiKey={apiKey}
                     onApiKeyChange={setApiKey}
                 />
-                <Dashboard />
+                <Dashboard
+                    activeTab={activeTab}
+                    setActiveTab={setActiveTab}
+                    workspace={workspace}
+                    isLoading={isLoading}
+                    error={error}
+                    hasSearched={hasSearched}
+                    loadingMessage={loadingMessage}
+                    onNodeClick={(node) => setSelectedNode(node)}
+                    selectedNode={selectedNode}
+                    onClearSelectedNode={() => setSelectedNode(null)}
+                    chatHistory={chatHistory}
+                    isChatting={isChatting}
+                    onSendMessage={handleSendMessage}
+                />
                 <Footer />
             </div>
             <DebugLogView 

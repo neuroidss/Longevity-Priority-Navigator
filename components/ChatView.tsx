@@ -1,9 +1,4 @@
 
-
-
-
-
-
 import React, { useState, useRef, useEffect } from 'react';
 import { ChatMessage, KnowledgeGraphNode, GroundingSource } from '../types';
 import { LightbulbIcon, NetworkIcon } from './icons';
@@ -39,9 +34,8 @@ const ChatView: React.FC<ChatViewProps> = ({
     const [input, setInput] = useState('');
     const endOfMessagesRef = useRef<HTMLDivElement>(null);
 
-    useEffect(() => {
-        endOfMessagesRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [chatHistory]);
+    // NOTE: The auto-scrolling useEffect was removed as per user request to stop all forced scrolling/focus changes.
+    // The user can now manually scroll the chat panel.
 
     const handleSend = () => {
         if (input.trim()) {
