@@ -451,15 +451,42 @@ const getContent = (doc: Document, selectors: string[], attribute: string = 'con
     return null;
 };
 
+const cleanDoiUrl = (url: string): string => {
+    const doiRegex = /(10\.\d{4,9}\/[-._;()/:A-Z0-9]+)/i;
+    const match = url.match(doiRegex);
+
+    if (match && match[1]) {
+        return `https://doi.org/${match[1]}`;
+    }
+    
+    return url;
+};
+
 export const enrichPrimarySource = async (source: SearchResult, addLog: (message: string) => void): Promise<SearchResult> => {
     if (source.snippet && !source.snippet.startsWith('Source from Google Search') && !source.snippet.startsWith('Excavated via') && !source.snippet.startsWith('Fetch failed')) {
         addLog(`[Enricher] Skipping enrichment for ${source.link} as it has a detailed snippet.`);
         return source;
     }
+    
+    const cleanedUrl = cleanDoiUrl(source.link);
+    if (cleanedUrl !== source.link) {
+        addLog(`[Enricher] Cleaned DOI URL from "${source.link}" to "${cleanedUrl}"`);
+    }
 
-    addLog(`[Enricher] Enriching: ${source.link}`);
+    addLog(`[Enricher] Enriching: ${cleanedUrl}`);
     try {
-        const response = await fetchWithCorsFallback(source.link, addLog);
+        const response = await fetchWithCorsFallback(cleanedUrl, addLog);
+        
+        // After redirects, the response.url is the final URL.
+        const finalUrl = response.url;
+        const linkToSave = (finalUrl && !finalUrl.includes('corsproxy') && !finalUrl.includes('allorigins') && !finalUrl.includes('thingproxy'))
+            ? finalUrl
+            : cleanedUrl;
+
+        if (linkToSave !== cleanedUrl) {
+             addLog(`[Enricher] URL redirected to canonical: "${linkToSave}"`);
+        }
+
         const html = await response.text();
         const parser = new DOMParser();
         const doc = parser.parseFromString(html, 'text/html');
@@ -480,12 +507,12 @@ export const enrichPrimarySource = async (source: SearchResult, addLog: (message
                     abstract = scholarlyArticle.description || scholarlyArticle.abstract || null;
                     if(scholarlyArticle.doi) doiFound = true;
                     if (title && abstract) {
-                         addLog(`[Enricher] Found title and abstract via JSON-LD for ${source.link}`);
+                         addLog(`[Enricher] Found title and abstract via JSON-LD for ${linkToSave}`);
                     }
                 }
             }
         } catch (e) {
-            addLog(`[Enricher] WARN: Could not parse JSON-LD from ${source.link}. Error: ${e}`);
+            addLog(`[Enricher] WARN: Could not parse JSON-LD from ${linkToSave}. Error: ${e}`);
         }
 
         // Strategy 2: Meta Tags
@@ -506,7 +533,7 @@ export const enrichPrimarySource = async (source: SearchResult, addLog: (message
             const doiMeta = getContent(doc, ['meta[name="citation_doi"]', 'meta[name="DC.identifier"]'], 'content');
             if (doiMeta && doiMeta.startsWith('10.')) {
                 doiFound = true;
-                addLog(`[Enricher] Found DOI in meta tag for ${source.link}`);
+                addLog(`[Enricher] Found DOI in meta tag for ${linkToSave}`);
             }
         }
 
@@ -529,7 +556,7 @@ export const enrichPrimarySource = async (source: SearchResult, addLog: (message
              const doiRegex = /(10\.\d{4,9}\/[-._;()/:A-Z0-9]+)/i;
              if (doiRegex.test(doc.body.textContent)) {
                  doiFound = true;
-                 addLog(`[Enricher] Found DOI via regex in body text for ${source.link}`);
+                 addLog(`[Enricher] Found DOI via regex in body text for ${linkToSave}`);
              }
         }
 
@@ -541,23 +568,29 @@ export const enrichPrimarySource = async (source: SearchResult, addLog: (message
         }
         
         if (abstract) {
-            addLog(`[Enricher] Successfully enriched snippet for ${source.link}. DOI found: ${doiFound}`);
+            addLog(`[Enricher] Successfully enriched snippet for ${linkToSave}. DOI found: ${doiFound}`);
         } else {
-            addLog(`[Enricher] WARN: Could not enrich snippet for ${source.link}. Using original snippet. DOI found: ${doiFound}`);
+            addLog(`[Enricher] WARN: Could not enrich snippet for ${linkToSave}. Using original snippet. DOI found: ${doiFound}`);
         }
 
         return {
             ...source,
+            link: linkToSave,
             title: enrichedTitle,
             snippet: enrichedSnippet,
         };
 
     } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error';
-        addLog(`[Enricher] ERROR: Failed to fetch or parse ${source.link}: ${message}. Returning original source.`);
+        addLog(`[Enricher] ERROR: Failed to fetch or parse ${cleanedUrl}: ${message}.`);
+        const doiRegex = /(10\.\d{4,9}\/[^ ]+)/i;
+        const doiMatch = source.link.match(doiRegex);
+        const fallbackTitle = doiMatch ? `DOI: ${doiMatch[0]}` : source.title;
+        
         return {
             ...source,
-            snippet: `Fetch failed: ${message}. Original snippet: ${source.snippet}`
+            title: fallbackTitle,
+            snippet: `Fetch failed. Could not retrieve content from the source.`
         };
     }
 };
