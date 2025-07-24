@@ -8,7 +8,7 @@ import {
 import { buildAgentPrompts, buildChatPrompt, buildDiscoverAndValidatePrompt, buildFilterBioRxivFeedPrompt, buildRelevanceFilterPrompt } from './agentPrompts';
 import { performFederatedSearch, excavatePrimarySources, isPrimarySourceDomain, enrichSearchResults, performGoogleSearch } from './searchService';
 
-const MAX_SOURCES_FOR_ANALYSIS = 60; // A safer limit to avoid context overflows
+const MAX_SOURCES_FOR_ANALYSIS = 40; // A safer limit to avoid context overflows
 
 // --- Parser functions (kept as local helpers) ---
 
@@ -222,10 +222,18 @@ export class ApiClient {
             if (uniqueSearchResults.length === 0) {
               throw new Error("Federated search returned no results for the topic.");
             }
+            
+            const resultsToFilter = uniqueSearchResults.length > MAX_SOURCES_FOR_ANALYSIS
+                ? uniqueSearchResults.slice(0, MAX_SOURCES_FOR_ANALYSIS)
+                : uniqueSearchResults;
+
+            if(uniqueSearchResults.length > MAX_SOURCES_FOR_ANALYSIS) {
+                this.addLog(`[discoverAndValidateSources] Limiting sources for Ollama filtering from ${uniqueSearchResults.length} to ${MAX_SOURCES_FOR_ANALYSIS}.`);
+            }
 
             setLoadingMessage("Step 2/3: Filtering relevant sources...");
-            this.addLog(`[discoverAndValidateSources] Asking Ollama to filter ${uniqueSearchResults.length} results for relevance.`);
-            const { systemInstruction, userPrompt } = buildRelevanceFilterPrompt(query, uniqueSearchResults);
+            this.addLog(`[discoverAndValidateSources] Asking Ollama to filter ${resultsToFilter.length} results for relevance.`);
+            const { systemInstruction, userPrompt } = buildRelevanceFilterPrompt(query, resultsToFilter);
             
             let relevantResults: SearchResult[];
             try {
@@ -233,12 +241,24 @@ export class ApiClient {
                 this.addLog(`[Ollama] Raw relevance filter response: ${responseText}`);
                 const jsonText = parseJsonFromText(responseText, this.addLog);
                 const parsed = JSON.parse(jsonText);
-                const relevantUrls = new Set(parsed.relevantArticleUrls as string[]);
-                relevantResults = uniqueSearchResults.filter(res => relevantUrls.has(res.link));
+                
+                let urls: string[] = [];
+                if (parsed.relevantArticleUrls && Array.isArray(parsed.relevantArticleUrls)) {
+                    this.addLog(`[discoverAndValidateSources] Found 'relevantArticleUrls' key. Processing.`);
+                    urls = parsed.relevantArticleUrls;
+                } else if (parsed.articles && Array.isArray(parsed.articles)) {
+                    this.addLog(`[discoverAndValidateSources] WARN: 'relevantArticleUrls' key not found. Found 'articles' key instead. Attempting to parse fallback structure.`);
+                    urls = parsed.articles.map((article: any) => article.url || article.link || article.uri).filter(Boolean);
+                } else {
+                    this.addLog(`[discoverAndValidateSources] WARN: Could not find 'relevantArticleUrls' or 'articles' key in AI response. Assuming no relevant articles found.`);
+                }
+
+                const relevantUrls = new Set(urls);
+                relevantResults = resultsToFilter.filter(res => relevantUrls.has(res.link));
                 this.addLog(`[discoverAndValidateSources] Ollama filtered down to ${relevantResults.length} relevant sources.`);
             } catch (e) {
-                this.addLog(`[discoverAndValidateSources] WARN: Ollama relevance filtering failed. Proceeding with all ${uniqueSearchResults.length} sources. Error: ${e}`);
-                relevantResults = uniqueSearchResults;
+                this.addLog(`[discoverAndValidateSources] WARN: Ollama relevance filtering failed. Proceeding with all ${resultsToFilter.length} sources. Error: ${e}`);
+                relevantResults = resultsToFilter;
             }
             
             if (relevantResults.length === 0) {

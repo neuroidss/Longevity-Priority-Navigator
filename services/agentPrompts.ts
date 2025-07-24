@@ -25,24 +25,29 @@ export const buildRelevanceFilterPrompt = (
         `<ARTICLE ${i + 1}>\n<URL>${item.link}</URL>\n<TITLE>${item.title}</TITLE>\n<SNIPPET>${item.snippet}</SNIPPET>\n</ARTICLE>`
     ).join('\n\n');
 
-    const userPrompt = `I am researching the topic "${query}". From the following list of search results, please identify which ones are relevant to my topic.\n\n${context}`;
+    const userPrompt = `Research Topic: "${query}"\n\nArticle List:\n\n${context}`;
 
-    const systemInstruction = `You are a helpful research assistant. Your task is to act as a relevance filter.
-You will be given a user's research topic and a list of search results.
-- Your goal is to identify which search results are **relevant**. A result is relevant if its title or snippet discusses the research topic.
-- Your output MUST be a single, valid JSON object. Do not use markdown code blocks.
-- The JSON object must contain a single key, "relevantArticleUrls", which is an array of strings.
-- Each string in the array must be the exact URL of a relevant article from the provided list.
-- If no articles are relevant, return an empty array: { "relevantArticleUrls": [] }.
-- Do not add any explanation or text outside the JSON object.
+    const systemInstruction = `You are a JSON-generating relevance filter. Your response MUST be a single, valid JSON object and nothing else.
 
-Example response:
+**Your Task:**
+1. You are given a research topic and a list of articles.
+2. Identify which articles are relevant. An article is relevant if its title or snippet directly discusses the topic.
+3. Your output MUST be a JSON object with a single key: "relevantArticleUrls".
+4. The value of "relevantArticleUrls" MUST be an array of strings.
+5. Each string in the array must be the exact URL of a relevant article from the provided list.
+
+**Example:**
 {
   "relevantArticleUrls": [
-    "https://www.example.com/article1",
-    "https://www.example.com/article2"
+    "https://www.biorxiv.org/content/10.1101/2025.07.20.665786v1",
+    "https://patents.google.com/patent/US20240108645A1/en"
   ]
-}`;
+}
+
+**Rules:**
+- If no articles are relevant, return an empty array: { "relevantArticleUrls": [] }.
+- Do NOT use markdown code blocks.
+- Do NOT add any explanation or text outside the single JSON object.`;
     return { systemInstruction, userPrompt };
 };
 
