@@ -451,40 +451,64 @@ const getContent = (doc: Document, selectors: string[], attribute: string = 'con
     return null;
 };
 
-const cleanDoiUrl = (url: string): string => {
+const extractDoi = (text: string): string | null => {
+    if (!text) return null;
     const doiRegex = /(10\.\d{4,9}\/[-._;()/:A-Z0-9]+)/i;
-    const match = url.match(doiRegex);
-
-    if (match && match[1]) {
-        return `https://doi.org/${match[1]}`;
-    }
-    
-    return url;
+    const match = text.match(doiRegex);
+    return match ? match[1] : null;
 };
 
 export const enrichPrimarySource = async (source: SearchResult, addLog: (message: string) => void): Promise<SearchResult> => {
-    if (source.snippet && !source.snippet.startsWith('Source from Google Search') && !source.snippet.startsWith('Excavated via') && !source.snippet.startsWith('Fetch failed')) {
-        addLog(`[Enricher] Skipping enrichment for ${source.link} as it has a detailed snippet.`);
+    if (source.snippet?.startsWith('[DOI Found]') || source.snippet?.startsWith('Fetch failed')) {
+        addLog(`[Enricher] Skipping enrichment for ${source.link} as it appears to be already processed.`);
         return source;
     }
-    
-    const cleanedUrl = cleanDoiUrl(source.link);
-    if (cleanedUrl !== source.link) {
-        addLog(`[Enricher] Cleaned DOI URL from "${source.link}" to "${cleanedUrl}"`);
+
+    const doi = extractDoi(source.link);
+    let server = '';
+    if (source.link.includes('biorxiv.org')) server = 'biorxiv';
+    else if (source.link.includes('medrxiv.org')) server = 'medrxiv';
+
+    // --- Strategy 1: BioRxiv/MedRxiv API ---
+    if (doi && server) {
+        addLog(`[Enricher] Found ${server} DOI: ${doi}. Attempting to use official API.`);
+        try {
+            const apiUrl = `https://api.biorxiv.org/details/${server}/${doi}`;
+            const response = await fetchWithCorsFallback(apiUrl, addLog);
+            if (!response.ok) {
+                throw new Error(`API returned status ${response.status}`);
+            }
+            const data = await response.json();
+            const article = data?.collection?.[0];
+            if (article?.doi && article?.title && article?.abstract) {
+                addLog(`[Enricher] Successfully enriched via ${server} API for DOI ${article.doi}.`);
+                return {
+                    ...source,
+                    link: `https://www.${server}.org/content/${article.doi}`,
+                    title: article.title,
+                    snippet: `[DOI Found] ${article.abstract}`,
+                };
+            } else {
+                throw new Error(`No valid article data found in API response for DOI ${doi}`);
+            }
+        } catch (error) {
+            addLog(`[Enricher] WARN: ${server} API fetch failed for DOI ${doi}: ${error instanceof Error ? error.message : String(error)}. Falling back to HTML scraping.`);
+        }
     }
 
-    addLog(`[Enricher] Enriching: ${cleanedUrl}`);
+    // --- Strategy 2: HTML Scraping (Fallback) ---
+    addLog(`[Enricher] Using HTML scraping fallback for: ${source.link}`);
+    const urlToScrape = doi ? `https://doi.org/${doi}` : source.link;
+
     try {
-        const response = await fetchWithCorsFallback(cleanedUrl, addLog);
-        
-        // After redirects, the response.url is the final URL.
+        const response = await fetchWithCorsFallback(urlToScrape, addLog);
         const finalUrl = response.url;
         const linkToSave = (finalUrl && !finalUrl.includes('corsproxy') && !finalUrl.includes('allorigins') && !finalUrl.includes('thingproxy'))
             ? finalUrl
-            : cleanedUrl;
+            : urlToScrape;
 
-        if (linkToSave !== cleanedUrl) {
-             addLog(`[Enricher] URL redirected to canonical: "${linkToSave}"`);
+        if (linkToSave !== urlToScrape) {
+            addLog(`[Enricher] URL redirected to canonical: "${linkToSave}"`);
         }
 
         const html = await response.text();
@@ -493,9 +517,8 @@ export const enrichPrimarySource = async (source: SearchResult, addLog: (message
 
         let title: string | null = null;
         let abstract: string | null = null;
-        let doiFound = false;
+        let doiFound = !!doi;
 
-        // Strategy 1: JSON-LD
         try {
             const jsonLdElement = doc.querySelector('script[type="application/ld+json"]');
             if (jsonLdElement && jsonLdElement.textContent) {
@@ -505,20 +528,20 @@ export const enrichPrimarySource = async (source: SearchResult, addLog: (message
                 if (scholarlyArticle) {
                     title = scholarlyArticle.headline || scholarlyArticle.name || null;
                     abstract = scholarlyArticle.description || scholarlyArticle.abstract || null;
-                    if(scholarlyArticle.doi) doiFound = true;
+                    if (scholarlyArticle.doi || extractDoi(scholarlyArticle.url || '')) doiFound = true;
                     if (title && abstract) {
-                         addLog(`[Enricher] Found title and abstract via JSON-LD for ${linkToSave}`);
+                        addLog(`[Enricher] Found title and abstract via JSON-LD for ${linkToSave}`);
                     }
                 }
             }
         } catch (e) {
-            addLog(`[Enricher] WARN: Could not parse JSON-LD from ${linkToSave}. Error: ${e}`);
+            const message = e instanceof Error ? e.message : "Unknown error";
+            addLog(`[Enricher] WARN: Could not parse JSON-LD from ${linkToSave}. Error: ${message}`);
         }
 
-        // Strategy 2: Meta Tags
         if (!title) {
             title = getContent(doc, ['meta[property="og:title"]', 'meta[name="twitter:title"]'], 'content');
-             if (!title) title = doc.querySelector('title')?.textContent || null;
+            if (!title) title = doc.querySelector('title')?.textContent || null;
         }
         if (!abstract) {
             abstract = getContent(doc, [
@@ -528,7 +551,6 @@ export const enrichPrimarySource = async (source: SearchResult, addLog: (message
                 'meta[name="description"]'
             ], 'content');
         }
-        // Look for DOI in meta tags if not already found
         if (!doiFound) {
             const doiMeta = getContent(doc, ['meta[name="citation_doi"]', 'meta[name="DC.identifier"]'], 'content');
             if (doiMeta && doiMeta.startsWith('10.')) {
@@ -537,40 +559,38 @@ export const enrichPrimarySource = async (source: SearchResult, addLog: (message
             }
         }
 
-        // Strategy 3: Body Selectors
         if (!title) {
             title = getContent(doc, ['h1'], 'textContent');
         }
         if (!abstract) {
             abstract = getContent(doc, [
-                'div[class*="abstract"]', 
+                'div[class*="abstract"]',
                 'section[id*="abstract"]',
                 '.abstract-content',
                 '#abstract',
                 'p.abstract'
             ], 'textContent');
         }
-        
-        // Strategy 4: Find DOI string in the text if still not found
+
         if (!doiFound && doc.body?.textContent) {
-             const doiRegex = /(10\.\d{4,9}\/[-._;()/:A-Z0-9]+)/i;
-             if (doiRegex.test(doc.body.textContent)) {
-                 doiFound = true;
-                 addLog(`[Enricher] Found DOI via regex in body text for ${linkToSave}`);
-             }
+            const foundDoi = extractDoi(doc.body.textContent);
+            if (foundDoi) {
+                doiFound = true;
+                addLog(`[Enricher] Found DOI via regex in body text for ${linkToSave}`);
+            }
         }
 
         const enrichedTitle = title ? stripTags(title) : source.title;
-        let enrichedSnippet = abstract ? stripTags(abstract) : source.snippet;
+        let enrichedSnippet = abstract ? stripTags(abstract) : `No abstract could be extracted. Original snippet: ${source.snippet}`;
 
-        if(doiFound) {
+        if (doiFound) {
             enrichedSnippet = `[DOI Found] ${enrichedSnippet}`;
         }
-        
+
         if (abstract) {
-            addLog(`[Enricher] Successfully enriched snippet for ${linkToSave}. DOI found: ${doiFound}`);
+            addLog(`[Enricher] Successfully enriched snippet via HTML scraping for ${linkToSave}. DOI found: ${doiFound}`);
         } else {
-            addLog(`[Enricher] WARN: Could not enrich snippet for ${linkToSave}. Using original snippet. DOI found: ${doiFound}`);
+            addLog(`[Enricher] WARN: Could not enrich snippet via HTML scraping for ${linkToSave}. Using fallback snippet. DOI found: ${doiFound}`);
         }
 
         return {
@@ -582,11 +602,9 @@ export const enrichPrimarySource = async (source: SearchResult, addLog: (message
 
     } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error';
-        addLog(`[Enricher] ERROR: Failed to fetch or parse ${cleanedUrl}: ${message}.`);
-        const doiRegex = /(10\.\d{4,9}\/[^ ]+)/i;
-        const doiMatch = source.link.match(doiRegex);
-        const fallbackTitle = doiMatch ? `DOI: ${doiMatch[0]}` : source.title;
-        
+        addLog(`[Enricher] ERROR: Failed to fetch or parse ${urlToScrape}: ${message}.`);
+        const fallbackTitle = doi ? `DOI: ${doi}` : source.title;
+
         return {
             ...source,
             title: fallbackTitle,

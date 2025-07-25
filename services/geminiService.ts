@@ -243,7 +243,60 @@ export class ApiClient {
                 const jsonText = parseJsonFromText(responseText, this.addLog);
                 const parsed = JSON.parse(jsonText);
                 
-                const indices: number[] = (parsed.relevantArticleIndices || []).filter((i: any) => typeof i === 'number');
+                let indices: number[] = [];
+
+                if (parsed.relevantArticleIndices && Array.isArray(parsed.relevantArticleIndices)) {
+                    this.addLog('[Ollama] Found "relevantArticleIndices" key in response.');
+                    indices = parsed.relevantArticleIndices.filter((i: any) => typeof i === 'number');
+                } else if (parsed.articles && Array.isArray(parsed.articles)) {
+                    this.addLog('[Ollama] WARN: "relevantArticleIndices" not found. Falling back to "articles" key.');
+                    
+                    const urlToIndexMap = new Map<string, number>();
+                    resultsToFilter.forEach((res, i) => {
+                        urlToIndexMap.set(res.link, i + 1); // Use 1-based index from the prompt
+                    });
+
+                    const returnedUrls = parsed.articles
+                        .map((article: any) => article.url)
+                        .filter((url: any) => typeof url === 'string');
+
+                    this.addLog(`[Ollama] AI returned ${returnedUrls.length} articles by URL. Attempting to match them to original indices.`);
+
+                    indices = returnedUrls
+                        .map((url: string) => {
+                            const index = urlToIndexMap.get(url);
+                            if (index === undefined) {
+                                this.addLog(`[Ollama] WARN: AI returned a URL not present in the original list: ${url}`);
+                            }
+                            return index;
+                        })
+                        .filter((index): index is number => index !== undefined);
+                } else if (parsed.data?.results && Array.isArray(parsed.data.results)) {
+                    this.addLog('[Ollama] WARN: "relevantArticleIndices" not found. Falling back to "data.results" key (Qwen model pattern).');
+
+                    const titleToIndexMap = new Map<string, number>();
+                    resultsToFilter.forEach((res, i) => {
+                        titleToIndexMap.set(res.title.toLowerCase().trim(), i + 1); // Use 1-based index from prompt
+                    });
+
+                    const returnedTitles = parsed.data.results
+                        .map((article: any) => article.title)
+                        .filter((title: any) => typeof title === 'string');
+
+                    this.addLog(`[Ollama] AI returned ${returnedTitles.length} articles by title. Attempting to match them to original indices.`);
+
+                    indices = returnedTitles
+                        .map((title: string) => {
+                            const index = titleToIndexMap.get(title.toLowerCase().trim());
+                            if (index === undefined) {
+                                this.addLog(`[Ollama] WARN: AI returned a title not present in the original list: ${title}`);
+                            }
+                            return index;
+                        })
+                        .filter((index): index is number => index !== undefined);
+                } else {
+                     this.addLog('[Ollama] WARN: Could not find "relevantArticleIndices", "articles", or other known fallback keys in AI response.');
+                }
 
                 if (indices.length > 0) {
                      relevantResults = indices
