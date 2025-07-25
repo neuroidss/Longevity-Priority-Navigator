@@ -1,7 +1,9 @@
 
+
 export enum ModelProvider {
     GoogleAI = 'Google AI',
     Ollama = 'Ollama',
+    OpenAI_API = 'OpenAI-Compatible API',
 }
 
 export interface ModelDefinition {

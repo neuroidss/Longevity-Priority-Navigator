@@ -1,5 +1,6 @@
 
 
+
 import { type ModelDefinition, type AnalysisLens, SearchDataSource, ModelProvider } from './types';
 import { ArticleIcon, PatentIcon, GoogleIcon, GeneIcon, WebIcon } from './components/icons';
 import React from 'react';
@@ -25,6 +26,7 @@ export const SUPPORTED_MODELS: ModelDefinition[] = [
     { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash-Lite', provider: ModelProvider.GoogleAI },
     { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash', provider: ModelProvider.GoogleAI },
     { id: 'gemini-2.0-flash-lite', name: 'Gemini 2.0 Flash-Lite', provider: ModelProvider.GoogleAI },
+    { id: 'custom-openai', name: 'Custom (OpenAI-Compatible)', provider: ModelProvider.OpenAI_API },
     { id: 'gemma3n:e4b', name: 'Gemma 3N E4B (Ollama)', provider: ModelProvider.Ollama },
     { id: 'gemma3n:e2b', name: 'Gemma 3N E2B (Ollama)', provider: ModelProvider.Ollama },
     { id: 'qwen3:14b', name: 'Qwen3 14B (Ollama)', provider: ModelProvider.Ollama },

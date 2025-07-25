@@ -1,5 +1,6 @@
 
 
+
 import React, { useState } from 'react';
 import { AgentType, type ModelDefinition, type AnalysisLens, ContradictionTolerance, SearchDataSource, ModelProvider } from '../types';
 import { EXAMPLE_TOPICS, SUPPORTED_MODELS, LENS_DEFINITIONS, DATA_SOURCE_DEFINITIONS } from '../constants';
@@ -20,22 +21,32 @@ interface AgentControlPanelProps {
   onDataSourceChange: (sources: SearchDataSource[]) => void;
   apiCallLimit: number;
   onApiCallLimitChange: (limit: number) => void;
+  openAIBaseUrl: string;
+  onOpenAIBaseUrlChange: (url: string) => void;
+  openAIModelName: string;
+  onOpenAIModelNameChange: (name: string) => void;
+  openAIApiKey: string;
+  onOpenAIApiKeyChange: (key: string) => void;
 }
 
 const AgentControlPanel: React.FC<AgentControlPanelProps> = ({ 
   topic, setTopic, onDispatchAgent, isLoading, model, setModel, 
   apiKey, onApiKeyChange, contradictionTolerance, setContradictionTolerance,
-  selectedDataSources, onDataSourceChange, apiCallLimit, onApiCallLimitChange
+  selectedDataSources, onDataSourceChange, apiCallLimit, onApiCallLimitChange,
+  openAIBaseUrl, onOpenAIBaseUrlChange, openAIModelName, onOpenAIModelNameChange,
+  openAIApiKey, onOpenAIApiKeyChange
 }) => {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [selectedLens, setSelectedLens] = useState<AnalysisLens>('Balanced');
 
-  const needsApiKey = model.provider === ModelProvider.GoogleAI && !process.env.API_KEY;
+  const needsGoogleApiKey = model.provider === ModelProvider.GoogleAI && !process.env.API_KEY;
+  const isOllamaProvider = model.provider === ModelProvider.Ollama;
+  const isOpenAIProvider = model.provider === ModelProvider.OpenAI_API;
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       e.preventDefault();
-      if (!isLoading && topic && !(needsApiKey && !apiKey)) {
+      if (!isLoading && topic && !(needsGoogleApiKey && !apiKey)) {
         onDispatchAgent(selectedLens, AgentType.KnowledgeNavigator, contradictionTolerance);
       }
     }
@@ -127,7 +138,7 @@ const AgentControlPanel: React.FC<AgentControlPanelProps> = ({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <button
                 onClick={() => onDispatchAgent(selectedLens, AgentType.KnowledgeNavigator, contradictionTolerance)}
-                disabled={isLoading || !topic || (needsApiKey && !apiKey)}
+                disabled={isLoading || !topic || (needsGoogleApiKey && !apiKey)}
                 className="flex items-center justify-center gap-3 px-4 py-4 rounded-xl font-bold transition-all duration-300 bg-purple-600 text-white text-lg hover:bg-purple-500 disabled:opacity-50 disabled:cursor-not-allowed border-2 border-purple-500 shadow-lg shadow-purple-500/20"
                 aria-label="Analyze topic and build knowledge graph"
               >
@@ -136,7 +147,7 @@ const AgentControlPanel: React.FC<AgentControlPanelProps> = ({
               </button>
               <button
                 onClick={() => onDispatchAgent(selectedLens, AgentType.TrendAnalyzer, contradictionTolerance)}
-                disabled={isLoading || !topic || (needsApiKey && !apiKey)}
+                disabled={isLoading || !topic || (needsGoogleApiKey && !apiKey)}
                 className="flex items-center justify-center gap-3 px-4 py-4 rounded-xl font-bold transition-all duration-300 bg-teal-600 text-white text-lg hover:bg-teal-500 disabled:opacity-50 disabled:cursor-not-allowed border-2 border-teal-500 shadow-lg shadow-teal-500/20"
                 aria-label="Analyze historical trends for the topic"
               >
@@ -200,7 +211,7 @@ const AgentControlPanel: React.FC<AgentControlPanelProps> = ({
                 />
             </div>
 
-            {needsApiKey && (
+            {needsGoogleApiKey && (
                 <div className="md:col-span-2">
                 <label htmlFor="api-key-input" className="block text-sm font-medium text-slate-300 mb-1">Google AI API Key</label>
                 <input
@@ -211,6 +222,46 @@ const AgentControlPanel: React.FC<AgentControlPanelProps> = ({
                     placeholder="Enter your Google AI API Key"
                     className="w-full px-4 py-2 text-sm bg-slate-700 border border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all duration-300 text-white placeholder-slate-400"
                 />
+                </div>
+            )}
+             {isOpenAIProvider && (
+                <div className="md:col-span-2 space-y-4 p-4 bg-slate-900/40 rounded-lg border border-slate-700">
+                    <h4 className="text-md font-semibold text-slate-300 text-center">OpenAI-Compatible API Settings</h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label htmlFor="openai-base-url" className="block text-sm font-medium text-slate-300 mb-1">Base URL</label>
+                            <input
+                                id="openai-base-url"
+                                type="text"
+                                value={openAIBaseUrl}
+                                onChange={(e) => onOpenAIBaseUrlChange(e.target.value)}
+                                placeholder="e.g., http://localhost:11434/v1"
+                                className="w-full px-3 py-2 text-sm bg-slate-700 border border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all duration-300 text-white placeholder-slate-400"
+                            />
+                        </div>
+                        <div>
+                            <label htmlFor="openai-model-name" className="block text-sm font-medium text-slate-300 mb-1">Model Name</label>
+                            <input
+                                id="openai-model-name"
+                                type="text"
+                                value={openAIModelName}
+                                onChange={(e) => onOpenAIModelNameChange(e.target.value)}
+                                placeholder="e.g., gemma3n:e4b"
+                                className="w-full px-3 py-2 text-sm bg-slate-700 border border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all duration-300 text-white placeholder-slate-400"
+                            />
+                        </div>
+                    </div>
+                    <div>
+                        <label htmlFor="openai-api-key" className="block text-sm font-medium text-slate-300 mb-1">API Key (Optional)</label>
+                        <input
+                            id="openai-api-key"
+                            type="password"
+                            value={openAIApiKey}
+                            onChange={(e) => onOpenAIApiKeyChange(e.target.value)}
+                            placeholder="Enter if required by your endpoint"
+                            className="w-full px-3 py-2 text-sm bg-slate-700 border border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all duration-300 text-white placeholder-slate-400"
+                        />
+                    </div>
                 </div>
             )}
           </div>
@@ -243,12 +294,17 @@ const AgentControlPanel: React.FC<AgentControlPanelProps> = ({
                 </div>
             </div>
 
-            {needsApiKey && (
+            {needsGoogleApiKey && (
                 <p className="text-xs text-slate-500 text-center -mt-4">Your key is stored in session storage and is only used to communicate with the Google AI API.</p>
             )}
-             {model.provider === ModelProvider.Ollama && (
+            {isOllamaProvider && (
                 <p className="text-xs text-slate-500 text-center -mt-4">
                     To use Ollama models, ensure the Ollama server is running locally and you have downloaded the model (e.g., `ollama pull llama3`).
+                </p>
+            )}
+             {isOpenAIProvider && (
+                <p className="text-xs text-slate-500 text-center -mt-4">
+                    For use with any OpenAI-compatible API, including local models via Ollama (use e.g., <code className="bg-slate-900 px-1 py-0.5 rounded">http://localhost:11434/v1</code>) or vLLM.
                 </p>
             )}
         </div>

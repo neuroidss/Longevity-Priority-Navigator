@@ -2,6 +2,7 @@
 
 import { SearchDataSource, type SearchResult, type GeneSearchedRecord, type OpenGeneSearchResponse } from '../types';
 import { GenerateContentResponse } from "@google/genai";
+import { pipeline, type Pipeline, type Tensor } from '@huggingface/transformers';
 
 type ProxyUrlBuilder = (url: string) => string;
 
@@ -77,6 +78,111 @@ const fetchWithCorsFallback = async (url: string, addLog: (message: string) => v
 };
 
 const stripTags = (html: string) => html.replace(/<[^>]*>?/gm, '').trim();
+
+class SentenceTransformer {
+    static instance: Pipeline | null = null;
+    static initializing: Promise<Pipeline> | null = null;
+
+    static async getInstance(addLog: (msg: string) => void): Promise<Pipeline> {
+        if (this.instance) {
+            return this.instance;
+        }
+
+        if (this.initializing) {
+            return this.initializing;
+        }
+
+        addLog('[Embeddings] Initializing sentence-transformer model (Xenova/all-MiniLM-L6-v2). This may take a moment on first load...');
+        this.initializing = pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2', {
+            progress_callback: (progress: any) => {
+                if (progress.status === 'progress') {
+                    addLog(`[Embeddings] Model loading: ${progress.file} (${(progress.progress || 0).toFixed(2)}%)`);
+                } else {
+                    addLog(`[Embeddings] Model loading: ${progress.status}`);
+                }
+            }
+        });
+
+        try {
+            this.instance = await this.initializing;
+            addLog('[Embeddings] Sentence-transformer model loaded successfully.');
+            return this.instance;
+        } catch (e) {
+            addLog(`[Embeddings] ERROR: Failed to load sentence-transformer model. ${e}`);
+            throw e;
+        } finally {
+            this.initializing = null;
+        }
+    }
+}
+
+const meanPool = (tensor: Tensor): number[] => {
+    const [_, num_tokens, hidden_dim] = tensor.dims;
+    const data = Array.from(tensor.data as Float32Array);
+    const pooled = new Array(hidden_dim).fill(0);
+
+    for (let i = 0; i < num_tokens; ++i) {
+        for (let j = 0; j < hidden_dim; ++j) {
+            pooled[j] += data[i * hidden_dim + j];
+        }
+    }
+
+    for (let j = 0; j < hidden_dim; ++j) {
+        pooled[j] /= num_tokens;
+    }
+
+    return pooled;
+};
+
+const cosineSimilarity = (vecA: number[], vecB: number[]): number => {
+    if (vecA.length !== vecB.length) return 0;
+    let dotProduct = 0.0;
+    let normA = 0.0;
+    let normB = 0.0;
+    for (let i = 0; i < vecA.length; i++) {
+        dotProduct += vecA[i] * vecB[i];
+        normA += vecA[i] * vecA[i];
+        normB += vecB[i] * vecB[i];
+    }
+    if (normA === 0 || normB === 0) return 0;
+    return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
+};
+
+const filterWithEmbeddings = async (
+    query: string,
+    results: SearchResult[],
+    addLog: (msg: string) => void
+): Promise<SearchResult[]> => {
+    try {
+        const extractor = await SentenceTransformer.getInstance(addLog);
+
+        const textsToEmbed = [query, ...results.map(r => `${r.title}. ${r.snippet}`)];
+        const output: Tensor = await extractor(textsToEmbed, { pooling: 'mean', normalize: true });
+
+        const embeddings: number[][] = [];
+        const [batch_size, hidden_dim] = output.dims;
+        const data = Array.from(output.data as Float32Array);
+        for(let i=0; i < batch_size; ++i) {
+            embeddings.push(Array.from(data.slice(i * hidden_dim, (i+1) * hidden_dim)));
+        }
+
+        const queryEmbedding = embeddings[0];
+        const resultEmbeddings = embeddings.slice(1);
+
+        const scoredResults = results.map((result, i) => ({
+            ...result,
+            similarity: cosineSimilarity(queryEmbedding, resultEmbeddings[i])
+        }));
+
+        scoredResults.sort((a, b) => b.similarity - a.similarity);
+
+        return scoredResults.slice(0, 5);
+
+    } catch (e) {
+        addLog(`[Embeddings] ERROR during filtering: ${e}. Returning original results.`);
+        return results;
+    }
+};
 
 export const performGoogleSearch = async (
     query: string,
@@ -296,7 +402,7 @@ const monitorBioRxivFeed = async (query: string, addLog: (message: string) => vo
             }
         });
         
-        addLog(`[Search.BioRxivFeed] Fetched ${results.length} raw items from the live feed. They will be filtered by AI.`);
+        addLog(`[Search.BioRxivFeed] Fetched ${results.length} raw items from the live feed. They will be filtered by AI or embeddings.`);
         return results;
     } catch (error) {
         addLog(`[Search.BioRxivFeed] Error monitoring live feed: ${error}`);
@@ -397,7 +503,8 @@ const searchOpenGenesAPI = async (query: string, addLog: (message: string) => vo
 export const performFederatedSearch = async (
     query: string,
     sources: SearchDataSource[],
-    addLog: (message: string) => void
+    addLog: (message: string) => void,
+    useEmbeddingFilterForFeed?: boolean
 ): Promise<SearchResult[]> => {
     let allResults: SearchResult[] = [];
     
@@ -426,6 +533,21 @@ export const performFederatedSearch = async (
             addLog(`[Search] WARN: ${sourceName} search failed: ${result.status === 'rejected' ? result.reason : 'No value returned'}`);
         }
     });
+
+    if (useEmbeddingFilterForFeed) {
+        const bioRxivResults = allResults.filter(r => r.source === SearchDataSource.BioRxivFeed);
+        if (bioRxivResults.length > 5) { // Only filter if there are many results
+            addLog(`[Search] Pre-filtering ${bioRxivResults.length} bioRxiv feed results using embeddings...`);
+            try {
+                const filteredBioRxivResults = await filterWithEmbeddings(query, bioRxivResults, addLog);
+                allResults = allResults.filter(r => r.source !== SearchDataSource.BioRxivFeed);
+                allResults.push(...filteredBioRxivResults);
+                addLog(`[Search] Finished pre-filtering bioRxiv feed. Kept top ${filteredBioRxivResults.length}.`);
+            } catch (e) {
+                 addLog(`[Search] WARN: Embedding-based filtering failed. Proceeding with unfiltered bioRxiv results. Error: ${e}`);
+            }
+        }
+    }
 
     const uniqueResults = Array.from(new Map(allResults.map(item => [item.link, item])).values());
     addLog(`[Search] Federated search complete. Total unique results: ${uniqueResults.length}`);
@@ -458,7 +580,7 @@ const extractDoi = (text: string): string | null => {
     return match ? match[1] : null;
 };
 
-export const enrichPrimarySource = async (source: SearchResult, addLog: (message: string) => void): Promise<SearchResult> => {
+export const enrichSource = async (source: SearchResult, addLog: (message: string) => void): Promise<SearchResult> => {
     if (source.snippet?.startsWith('[DOI Found]') || source.snippet?.startsWith('Fetch failed')) {
         addLog(`[Enricher] Skipping enrichment for ${source.link} as it appears to be already processed.`);
         return source;
@@ -613,12 +735,12 @@ export const enrichPrimarySource = async (source: SearchResult, addLog: (message
     }
 };
 
-export const enrichPrimarySources = async (sources: SearchResult[], addLog: (message: string) => void): Promise<SearchResult[]> => {
+export const enrichSources = async (sources: SearchResult[], addLog: (message: string) => void): Promise<SearchResult[]> => {
     if (!sources || sources.length === 0) return [];
 
-    addLog(`[Enricher] Starting enrichment for ${sources.length} primary sources.`);
+    addLog(`[Enricher] Starting enrichment for ${sources.length} sources.`);
     
-    const enrichmentPromises = sources.map(source => enrichPrimarySource(source, addLog));
+    const enrichmentPromises = sources.map(source => enrichSource(source, addLog));
     
     const results = await Promise.all(enrichmentPromises);
     

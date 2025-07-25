@@ -1,5 +1,6 @@
 
 
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { AgentType, type AnalysisLens, type ChatMessage, type KnowledgeGraphNode, type GroundingSource, type WorkspaceState, SourceStatus, ContradictionTolerance, ModelProvider } from './types';
 import { ApiClient } from './services/geminiService';
@@ -92,13 +93,19 @@ const App: React.FC = () => {
     const settings = useAppSettings(addLog, APP_STATE_STORAGE_KEY);
     const { 
       model, setModel, apiKey, setApiKey, contradictionTolerance, 
-      setContradictionTolerance, selectedDataSources, setSelectedDataSources 
+      setContradictionTolerance, selectedDataSources, setSelectedDataSources,
+      openAIBaseUrl, setOpenAIBaseUrl, openAIModelName, setOpenAIModelName,
+      openAIApiKey, setOpenAIApiKey
     } = settings;
     const { usageState, setApiCallLimit, checkAndIncrement } = useApiUsageManager(addLog);
 
     const apiClient = useMemo(() => 
-        new ApiClient(apiKey, addLog, checkAndIncrement),
-        [apiKey, addLog, checkAndIncrement]
+        new ApiClient(apiKey, addLog, checkAndIncrement, {
+            baseUrl: openAIBaseUrl,
+            modelName: openAIModelName,
+            apiKey: openAIApiKey,
+        }),
+        [apiKey, addLog, checkAndIncrement, openAIBaseUrl, openAIModelName, openAIApiKey]
     );
 
     const { 
@@ -207,6 +214,12 @@ const App: React.FC = () => {
                     onDataSourceChange={setSelectedDataSources}
                     apiCallLimit={usageState.limit}
                     onApiCallLimitChange={setApiCallLimit}
+                    openAIBaseUrl={openAIBaseUrl}
+                    onOpenAIBaseUrlChange={setOpenAIBaseUrl}
+                    openAIModelName={openAIModelName}
+                    onOpenAIModelNameChange={setOpenAIModelName}
+                    openAIApiKey={openAIApiKey}
+                    onOpenAIApiKeyChange={setOpenAIApiKey}
                 />
                 <Dashboard
                     activeTab={activeTab}

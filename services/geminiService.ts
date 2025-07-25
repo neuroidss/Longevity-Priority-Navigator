@@ -7,7 +7,7 @@ import {
     SearchDataSource, type SearchResult, ContradictionTolerance, ModelProvider
 } from '../types';
 import { buildAgentPrompts, buildChatPrompt, buildDiscoverAndValidatePrompt, buildFilterBioRxivFeedPrompt, buildRelevanceFilterPrompt } from './agentPrompts';
-import { performFederatedSearch, isPrimarySourceDomain, performGoogleSearch, enrichPrimarySources } from './searchService';
+import { performFederatedSearch, isPrimarySourceDomain, performGoogleSearch, enrichSources } from './searchService';
 
 const MAX_SOURCES_FOR_ANALYSIS = 40; // A safer limit to avoid context overflows
 
@@ -88,12 +88,25 @@ export class ApiClient {
     private addLog: (msg: string) => void;
     private checkAndIncrement: () => Promise<void>;
     private aiInstance: GoogleGenAI | null = null;
+    
+    private openAIBaseUrl?: string;
+    private openAIModelName?: string;
+    private openAIApiKey?: string;
 
-    constructor(apiKey: string | undefined, addLog: (msg: string) => void, checkAndIncrement: () => Promise<void>) {
+    constructor(
+        apiKey: string | undefined, 
+        addLog: (msg: string) => void, 
+        checkAndIncrement: () => Promise<void>,
+        openAISettings: { baseUrl?: string, modelName?: string, apiKey?: string }
+    ) {
         this.apiKey = (apiKey || process.env.API_KEY)?.trim();
         this.addLog = addLog;
         this.checkAndIncrement = checkAndIncrement;
         this.initializeAI();
+        
+        this.openAIBaseUrl = openAISettings.baseUrl;
+        this.openAIModelName = openAISettings.modelName;
+        this.openAIApiKey = openAISettings.apiKey;
     }
     
     private initializeAI() {
@@ -108,6 +121,60 @@ export class ApiClient {
     public updateApiKey(apiKey?: string) {
         this.apiKey = (apiKey || process.env.API_KEY)?.trim();
         this.initializeAI();
+    }
+
+    private async callOpenAICompatibleAPI(systemInstruction: string, userPrompt: string, isJson: boolean): Promise<string> {
+        if (!this.openAIBaseUrl || !this.openAIModelName) {
+            throw new Error("OpenAI-compatible API Base URL or Model Name is not configured.");
+        }
+        
+        const endpoint = `${this.openAIBaseUrl.replace(/\/$/, '')}/chat/completions`;
+        this.addLog(`[OpenAI_API] Calling model '${this.openAIModelName}' at '${endpoint}'...`);
+    
+        const headers: HeadersInit = {
+            'Content-Type': 'application/json',
+        };
+        if (this.openAIApiKey) {
+            headers['Authorization'] = `Bearer ${this.openAIApiKey}`;
+        }
+    
+        const body = {
+            model: this.openAIModelName,
+            messages: [
+                { role: 'system', content: systemInstruction },
+                { role: 'user', content: userPrompt }
+            ],
+            stream: false,
+            ...(isJson && { response_format: { type: 'json_object' } })
+        };
+    
+        try {
+            const response = await fetch(endpoint, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify(body),
+            });
+    
+            if (!response.ok) {
+                const errorBody = await response.text();
+                throw new Error(`OpenAI-compatible API request failed with status ${response.status}: ${errorBody}`);
+            }
+    
+            const data = await response.json();
+            const content = data?.choices?.[0]?.message?.content;
+    
+            if (!content) {
+                throw new Error("OpenAI-compatible API response was empty or in an unexpected format.");
+            }
+            
+            this.addLog(`[OpenAI_API] Received response from '${this.openAIModelName}'.`);
+            return content;
+    
+        } catch (error) {
+            this.addLog(`[OpenAI_API] ERROR: Failed to connect to the server. ${error}`);
+            const friendlyError = `Failed to connect to the OpenAI-compatible server at ${this.openAIBaseUrl}. Please ensure it's running and the settings are correct.`;
+            throw new Error(friendlyError);
+        }
     }
 
     private async callOllamaAPI(model: string, systemInstruction: string, userPrompt: string, isJson: boolean): Promise<string> {
@@ -205,6 +272,101 @@ export class ApiClient {
             return [];
         }
     };
+    
+    private async filterResultsWithLocalAI(
+        query: string,
+        resultsToFilter: SearchResult[],
+        model: ModelDefinition,
+        providerName: 'Ollama' | 'OpenAI_API'
+    ): Promise<SearchResult[]> {
+        if (resultsToFilter.length === 0) return [];
+        
+        const { systemInstruction, userPrompt } = buildRelevanceFilterPrompt(query, resultsToFilter);
+        
+        try {
+            const responseText = model.provider === ModelProvider.OpenAI_API
+                ? await this.callOpenAICompatibleAPI(systemInstruction, userPrompt, true)
+                : await this.callOllamaAPI(model.id, systemInstruction, userPrompt, true);
+    
+            this.addLog(`[${providerName}] Raw relevance filter response: ${responseText}`);
+            const jsonText = parseJsonFromText(responseText, this.addLog);
+            const parsed = JSON.parse(jsonText);
+            
+            let indices: number[] = [];
+    
+            if (parsed.relevantArticleIndices && Array.isArray(parsed.relevantArticleIndices)) {
+                this.addLog(`[${providerName}] Found "relevantArticleIndices" key in response.`);
+                indices = parsed.relevantArticleIndices.filter((i: any) => typeof i === 'number');
+            } else if (parsed.articles && Array.isArray(parsed.articles)) {
+                this.addLog(`[${providerName}] WARN: "relevantArticleIndices" not found. Falling back to "articles" key.`);
+                
+                const urlToIndexMap = new Map<string, number>();
+                resultsToFilter.forEach((res, i) => {
+                    urlToIndexMap.set(res.link, i + 1); // Use 1-based index from the prompt
+                });
+    
+                const returnedUrls = parsed.articles
+                    .map((article: any) => article.url)
+                    .filter((url: any) => typeof url === 'string');
+    
+                this.addLog(`[${providerName}] AI returned ${returnedUrls.length} articles by URL. Attempting to match them to original indices.`);
+    
+                indices = returnedUrls
+                    .map((url: string) => {
+                        const index = urlToIndexMap.get(url);
+                        if (index === undefined) {
+                            this.addLog(`[${providerName}] WARN: AI returned a URL not present in the original list: ${url}`);
+                        }
+                        return index;
+                    })
+                    .filter((index): index is number => index !== undefined);
+            } else if (parsed.data?.results && Array.isArray(parsed.data.results)) {
+                this.addLog(`[${providerName}] WARN: "relevantArticleIndices" not found. Falling back to "data.results" key (Qwen model pattern).`);
+    
+                const titleToIndexMap = new Map<string, number>();
+                resultsToFilter.forEach((res, i) => {
+                    titleToIndexMap.set(res.title.toLowerCase().trim(), i + 1); // Use 1-based index from prompt
+                });
+    
+                const returnedTitles = parsed.data.results
+                    .map((article: any) => article.title)
+                    .filter((title: any) => typeof title === 'string');
+    
+                this.addLog(`[${providerName}] AI returned ${returnedTitles.length} articles by title. Attempting to match them to original indices.`);
+    
+                indices = returnedTitles
+                    .map((title: string) => {
+                        const index = titleToIndexMap.get(title.toLowerCase().trim());
+                        if (index === undefined) {
+                            this.addLog(`[${providerName}] WARN: AI returned a title not present in the original list: ${title}`);
+                        }
+                        return index;
+                    })
+                    .filter((index): index is number => index !== undefined);
+            } else {
+                 this.addLog(`[${providerName}] WARN: Could not find "relevantArticleIndices", "articles", or other known fallback keys in AI response.`);
+            }
+    
+            if (indices.length > 0) {
+                 const relevantResults = indices
+                    .map(index => {
+                        const res = resultsToFilter[index - 1]; // 1-based index from prompt
+                        if (!res) {
+                            this.addLog(`[filterResultsWithLocalAI] WARN: AI returned an out-of-bounds index: ${index}`);
+                        }
+                        return res;
+                    })
+                    .filter((res): res is SearchResult => !!res);
+                 return relevantResults;
+            } else {
+                 this.addLog(`[filterResultsWithLocalAI] WARN: AI did not return any valid indices for this batch.`);
+                 return [];
+            }
+        } catch (e) {
+            this.addLog(`[filterResultsWithLocalAI] WARN: ${providerName} relevance filtering for this batch failed. Error: ${e}`);
+            return []; // Return empty on error to not pollute results
+        }
+    }
 
     public async discoverAndValidateSources(
         query: string,
@@ -214,145 +376,84 @@ export class ApiClient {
     ): Promise<GroundingSource[]> {
         this.addLog(`[discoverAndValidateSources] Starting with enabled sources: ${enabledSources.join(', ')}`);
 
-        if (model.provider === ModelProvider.Ollama) {
+        if (model.provider === ModelProvider.Ollama || model.provider === ModelProvider.OpenAI_API) {
             setLoadingMessage("Step 1/3: Searching for context...");
-            this.addLog('[discoverAndValidateSources] Ollama model detected. Performing federated search.');
-            const searchResults = await performFederatedSearch(query, enabledSources, this.addLog);
+            const providerName = model.provider === ModelProvider.Ollama ? 'Ollama' : 'OpenAI_API';
+            this.addLog(`[discoverAndValidateSources] ${providerName} model detected. Using federated search.`);
+            
+            // Step 1: Federated Search
+            const searchResults = await performFederatedSearch(query, enabledSources, this.addLog, true);
             const uniqueSearchResults = Array.from(new Map(searchResults.map(item => [item.link, item])).values());
             
             if (uniqueSearchResults.length === 0) {
               throw new Error("Federated search returned no results for the topic.");
             }
             
-            const resultsToFilter = uniqueSearchResults.length > MAX_SOURCES_FOR_ANALYSIS
-                ? uniqueSearchResults.slice(0, MAX_SOURCES_FOR_ANALYSIS)
-                : uniqueSearchResults;
+            // Step 2: Separate Primary and Secondary sources
+            const primaryResults = uniqueSearchResults.filter(res => isPrimarySourceDomain(res.link));
+            const secondaryResults = uniqueSearchResults.filter(res => !isPrimarySourceDomain(res.link));
+            this.addLog(`[discoverAndValidateSources] Separated sources: ${primaryResults.length} primary, ${secondaryResults.length} secondary.`);
 
-            if(uniqueSearchResults.length > MAX_SOURCES_FOR_ANALYSIS) {
-                this.addLog(`[discoverAndValidateSources] Limiting sources for Ollama filtering from ${uniqueSearchResults.length} to ${MAX_SOURCES_FOR_ANALYSIS}.`);
+            setLoadingMessage("Step 2/3: AI filtering relevant sources...");
+            let relevantResults: SearchResult[] = [];
+
+            // Step 3: Prioritize and filter Primary sources
+            if (primaryResults.length > 0) {
+                const primaryToFilter = primaryResults.slice(0, MAX_SOURCES_FOR_ANALYSIS);
+                this.addLog(`[discoverAndValidateSources] Asking ${providerName} to filter ${primaryToFilter.length} primary results for relevance.`);
+                const relevantPrimary = await this.filterResultsWithLocalAI(query, primaryToFilter, model, providerName);
+                this.addLog(`[discoverAndValidateSources] ${providerName} filtered down to ${relevantPrimary.length} relevant primary sources.`);
+                relevantResults.push(...relevantPrimary);
             }
-
-            setLoadingMessage("Step 2/3: Filtering relevant sources...");
-            this.addLog(`[discoverAndValidateSources] Asking Ollama to filter ${resultsToFilter.length} results for relevance.`);
-            const { systemInstruction, userPrompt } = buildRelevanceFilterPrompt(query, resultsToFilter);
-            
-            let relevantResults: SearchResult[];
-            try {
-                const responseText = await this.callOllamaAPI(model.id, systemInstruction, userPrompt, true);
-                this.addLog(`[Ollama] Raw relevance filter response: ${responseText}`);
-                const jsonText = parseJsonFromText(responseText, this.addLog);
-                const parsed = JSON.parse(jsonText);
+        
+            // Step 4: If needed, filter Secondary sources
+            const remainingCapacity = MAX_SOURCES_FOR_ANALYSIS - relevantResults.length;
+            if (remainingCapacity > 0 && secondaryResults.length > 0) {
+                if (relevantResults.length === 0) {
+                     this.addLog(`[discoverAndValidateSources] No relevant primary sources found. Asking ${providerName} to filter secondary results.`);
+                } else {
+                     this.addLog(`[discoverAndValidateSources] Supplementing with secondary sources. Asking ${providerName} to filter secondary results.`);
+                }
                 
-                let indices: number[] = [];
-
-                if (parsed.relevantArticleIndices && Array.isArray(parsed.relevantArticleIndices)) {
-                    this.addLog('[Ollama] Found "relevantArticleIndices" key in response.');
-                    indices = parsed.relevantArticleIndices.filter((i: any) => typeof i === 'number');
-                } else if (parsed.articles && Array.isArray(parsed.articles)) {
-                    this.addLog('[Ollama] WARN: "relevantArticleIndices" not found. Falling back to "articles" key.');
-                    
-                    const urlToIndexMap = new Map<string, number>();
-                    resultsToFilter.forEach((res, i) => {
-                        urlToIndexMap.set(res.link, i + 1); // Use 1-based index from the prompt
-                    });
-
-                    const returnedUrls = parsed.articles
-                        .map((article: any) => article.url)
-                        .filter((url: any) => typeof url === 'string');
-
-                    this.addLog(`[Ollama] AI returned ${returnedUrls.length} articles by URL. Attempting to match them to original indices.`);
-
-                    indices = returnedUrls
-                        .map((url: string) => {
-                            const index = urlToIndexMap.get(url);
-                            if (index === undefined) {
-                                this.addLog(`[Ollama] WARN: AI returned a URL not present in the original list: ${url}`);
-                            }
-                            return index;
-                        })
-                        .filter((index): index is number => index !== undefined);
-                } else if (parsed.data?.results && Array.isArray(parsed.data.results)) {
-                    this.addLog('[Ollama] WARN: "relevantArticleIndices" not found. Falling back to "data.results" key (Qwen model pattern).');
-
-                    const titleToIndexMap = new Map<string, number>();
-                    resultsToFilter.forEach((res, i) => {
-                        titleToIndexMap.set(res.title.toLowerCase().trim(), i + 1); // Use 1-based index from prompt
-                    });
-
-                    const returnedTitles = parsed.data.results
-                        .map((article: any) => article.title)
-                        .filter((title: any) => typeof title === 'string');
-
-                    this.addLog(`[Ollama] AI returned ${returnedTitles.length} articles by title. Attempting to match them to original indices.`);
-
-                    indices = returnedTitles
-                        .map((title: string) => {
-                            const index = titleToIndexMap.get(title.toLowerCase().trim());
-                            if (index === undefined) {
-                                this.addLog(`[Ollama] WARN: AI returned a title not present in the original list: ${title}`);
-                            }
-                            return index;
-                        })
-                        .filter((index): index is number => index !== undefined);
-                } else {
-                     this.addLog('[Ollama] WARN: Could not find "relevantArticleIndices", "articles", or other known fallback keys in AI response.');
-                }
-
-                if (indices.length > 0) {
-                     relevantResults = indices
-                        .map(index => {
-                            const res = resultsToFilter[index - 1]; // 1-based index from prompt
-                            if (!res) {
-                                this.addLog(`[discoverAndValidateSources] WARN: AI returned an out-of-bounds index: ${index}`);
-                            }
-                            return res;
-                        })
-                        .filter((res): res is SearchResult => !!res);
-                     this.addLog(`[discoverAndValidateSources] Ollama filtered down to ${relevantResults.length} relevant sources via indices.`);
-                } else {
-                     this.addLog(`[discoverAndValidateSources] WARN: AI did not return any valid indices. This could be correct (no relevant articles) or a model failure.`);
-                     relevantResults = [];
-                }
-            } catch (e) {
-                this.addLog(`[discoverAndValidateSources] WARN: Ollama relevance filtering failed. Proceeding with all ${resultsToFilter.length} sources. Error: ${e}`);
-                relevantResults = resultsToFilter;
+                const secondaryToFilter = secondaryResults.slice(0, remainingCapacity);
+                const relevantSecondary = await this.filterResultsWithLocalAI(query, secondaryToFilter, model, providerName);
+                this.addLog(`[discoverAndValidateSources] ${providerName} filtered down to ${relevantSecondary.length} relevant secondary sources.`);
+                relevantResults.push(...relevantSecondary);
             }
             
             if (relevantResults.length === 0) {
-              throw new Error("Ollama model filtered out all search results as irrelevant.");
-            }
-            
-            this.addLog(`[discoverAndValidateSources] OLLAMA Path: Filtering for primary scientific domains...`);
-            const finalPrimaryResults = relevantResults.filter(res => isPrimarySourceDomain(res.link));
-            this.addLog(`[discoverAndValidateSources] OLLAMA Path: Identified ${finalPrimaryResults.length} potential primary sources.`);
-
-            if (finalPrimaryResults.length === 0) {
-                throw new Error("Could not find any primary scientific sources for the topic after AI filtering.");
-            }
-            
-            setLoadingMessage("Step 3/3: Enriching primary sources...");
-            const enrichedPrimaryResults = await enrichPrimarySources(finalPrimaryResults, this.addLog);
-
-            if (enrichedPrimaryResults.length === 0) {
-                throw new Error("Could not find or enrich any primary scientific sources for the topic after filtering.");
+              throw new Error(`The ${providerName} model filtered out all search results as irrelevant.`);
             }
 
-            const limitedResults = enrichedPrimaryResults.slice(0, MAX_SOURCES_FOR_ANALYSIS);
-            if(enrichedPrimaryResults.length > MAX_SOURCES_FOR_ANALYSIS) {
-                this.addLog(`[discoverAndValidateSources] Limiting sources for Ollama context from ${enrichedPrimaryResults.length} to ${MAX_SOURCES_FOR_ANALYSIS}.`);
+            // Step 5: Enrich and finalize
+            setLoadingMessage("Step 3/3: Enriching relevant sources...");
+            const enrichedResults = await enrichSources(relevantResults, this.addLog);
+
+            if (enrichedResults.length === 0) {
+                throw new Error("Could not find or enrich any sources for the topic after AI filtering.");
             }
+
+            const limitedResults = enrichedResults.slice(0, MAX_SOURCES_FOR_ANALYSIS);
+            if(enrichedResults.length > MAX_SOURCES_FOR_ANALYSIS) {
+                this.addLog(`[discoverAndValidateSources] Limiting total sources for ${providerName} context from ${enrichedResults.length} to ${MAX_SOURCES_FOR_ANALYSIS}.`);
+            }
+
+            const groundingSources: GroundingSource[] = limitedResults.map(res => {
+                const isPrimary = isPrimarySourceDomain(res.link);
+                return {
+                    uri: res.link,
+                    title: res.title,
+                    status: 'unverified',
+                    origin: res.source,
+                    content: res.snippet,
+                    reliability: isPrimary ? 0.6 : 0.2, // Assign different base reliability
+                    reliabilityJustification: isPrimary 
+                        ? "Source relevance assessed by local AI from a primary scientific domain."
+                        : "This is not from a primary scientific source and should be treated with caution. Relevance assessed by local AI."
+                };
+            });
     
-            const groundingSources: GroundingSource[] = limitedResults.map(res => ({
-                uri: res.link,
-                title: res.title,
-                status: 'unverified', // Ollama path doesn't do deep validation
-                origin: res.source,
-                content: res.snippet,
-                reliability: 0.5, // Assign a neutral reliability for Ollama path
-                reliabilityJustification: "Source relevance assessed by local AI; content enriched but reliability not deeply analyzed."
-            }));
-    
-            this.addLog(`[discoverAndValidateSources] Found ${groundingSources.length} sources for Ollama context.`);
+            this.addLog(`[discoverAndValidateSources] Found ${groundingSources.length} total relevant sources for ${providerName} context.`);
             return groundingSources;
         }
 
@@ -365,7 +466,7 @@ export class ApiClient {
         this.addLog(`[discoverAndValidateSources] Starting concurrent searches...`);
         const searchPromises = [];
         if (specialistSearchSources.length > 0) {
-            searchPromises.push(performFederatedSearch(query, specialistSearchSources, this.addLog));
+            searchPromises.push(performFederatedSearch(query, specialistSearchSources, this.addLog, false));
         }
         if (useGoogleSearch) {
             searchPromises.push(performGoogleSearch(query, this.addLog, async () => {
@@ -426,7 +527,7 @@ export class ApiClient {
         }
         
         setLoadingMessage("Step 2/3: Enriching primary source content...");
-        const enrichedPrimaryResults = await enrichPrimarySources(finalPrimaryResults, this.addLog);
+        const enrichedPrimaryResults = await enrichSources(finalPrimaryResults, this.addLog);
         this.addLog(`[discoverAndValidateSources] Finished enriching sources. Total primary sources for assessment: ${enrichedPrimaryResults.length}.`);
 
         setLoadingMessage("Step 3/3: AI assessing source reliability...");
@@ -499,8 +600,10 @@ export class ApiClient {
             const { systemInstruction, userPrompt } = buildAgentPrompts(query, agentType, validatedSources, lens, tolerance);
             let jsonText: string;
 
-            if (model.provider === ModelProvider.Ollama) {
-                const responseText = await this.callOllamaAPI(model.id, systemInstruction, userPrompt, true);
+            if (model.provider === ModelProvider.Ollama || model.provider === ModelProvider.OpenAI_API) {
+                const responseText = model.provider === ModelProvider.Ollama
+                    ? await this.callOllamaAPI(model.id, systemInstruction, userPrompt, true)
+                    : await this.callOpenAICompatibleAPI(systemInstruction, userPrompt, true);
                 jsonText = parseJsonFromText(responseText, this.addLog);
             } else { // Google AI
                 const response = await this.callGoogleAI(model.id, systemInstruction, userPrompt, false);
@@ -530,8 +633,10 @@ export class ApiClient {
         const { systemInstruction, userPrompt } = buildChatPrompt(message, workspace);
 
         try {
-            if (model.provider === ModelProvider.Ollama) {
-                return await this.callOllamaAPI(model.id, systemInstruction, userPrompt, false);
+            if (model.provider === ModelProvider.Ollama || model.provider === ModelProvider.OpenAI_API) {
+                return model.provider === ModelProvider.Ollama
+                    ? await this.callOllamaAPI(model.id, systemInstruction, userPrompt, false)
+                    : await this.callOpenAICompatibleAPI(systemInstruction, userPrompt, false);
             }
             
             // Google AI Path
