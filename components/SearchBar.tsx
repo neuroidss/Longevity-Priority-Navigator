@@ -1,5 +1,4 @@
 
-
 import React, { useState } from 'react';
 import { AgentType, type ModelDefinition, type AnalysisLens, ContradictionTolerance, SearchDataSource, ModelProvider } from '../types';
 import { EXAMPLE_TOPICS, SUPPORTED_MODELS, LENS_DEFINITIONS, DATA_SOURCE_DEFINITIONS } from '../constants';
@@ -27,6 +26,8 @@ interface AgentControlPanelProps {
   openAIApiKey: string;
   onOpenAIApiKeyChange: (key: string) => void;
   isAnalysisComplete: boolean;
+  preprocessQuery: boolean;
+  onPreprocessQueryChange: (enabled: boolean) => void;
 }
 
 const AgentControlPanel: React.FC<AgentControlPanelProps> = ({ 
@@ -34,7 +35,8 @@ const AgentControlPanel: React.FC<AgentControlPanelProps> = ({
   apiKey, onApiKeyChange, contradictionTolerance, setContradictionTolerance,
   dataSourceLimits, onDataSourceLimitChange, apiCallLimit, onApiCallLimitChange,
   openAIBaseUrl, onOpenAIBaseUrlChange, openAIModelName, onOpenAIModelNameChange,
-  openAIApiKey, onOpenAIApiKeyChange, isAnalysisComplete
+  openAIApiKey, onOpenAIApiKeyChange, isAnalysisComplete,
+  preprocessQuery, onPreprocessQueryChange
 }) => {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [selectedLens, setSelectedLens] = useState<AnalysisLens>('Balanced');
@@ -220,7 +222,29 @@ const AgentControlPanel: React.FC<AgentControlPanelProps> = ({
                     disabled={model.provider !== ModelProvider.GoogleAI}
                 />
             </div>
-
+            <div className="md:col-span-2 flex items-center justify-between p-3 bg-slate-700/40 rounded-lg">
+                <div className="flex-grow">
+                    <label htmlFor="query-preprocess-toggle" className="font-medium text-slate-200">AI Query Pre-processing</label>
+                    <p className="text-xs text-slate-400">Auto-translates & refines topic for better scientific search results.</p>
+                </div>
+                <button
+                    type="button"
+                    id="query-preprocess-toggle"
+                    onClick={() => onPreprocessQueryChange(!preprocessQuery)}
+                    className={`${
+                    preprocessQuery ? 'bg-purple-600' : 'bg-slate-600'
+                    } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 focus:ring-offset-slate-800`}
+                    role="switch"
+                    aria-checked={preprocessQuery}
+                >
+                    <span
+                    aria-hidden="true"
+                    className={`${
+                        preprocessQuery ? 'translate-x-5' : 'translate-x-0'
+                    } pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
+                    />
+                </button>
+            </div>
             {needsGoogleApiKey && (
                 <div className="md:col-span-2">
                 <label htmlFor="api-key-input" className="block text-sm font-medium text-slate-300 mb-1">Google AI API Key</label>

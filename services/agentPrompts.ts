@@ -1,5 +1,4 @@
 
-
 import { AgentType, type WorkspaceState, type AnalysisLens, type GroundingSource, type SearchResult, ContradictionTolerance } from '../types';
 import { LENS_DEFINITIONS } from "../constants";
 
@@ -36,6 +35,35 @@ const TOLERANCE_INSTRUCTIONS: Record<ContradictionTolerance, string> = {
     'High': `**Contradiction Strategy: Exploratory.** Actively seek out and explore contradictions, even from lower-reliability sources if they are provocative. Treat outlier and controversial findings as potentially high-impact areas for future research. Your 'researchOpportunities' should include proposals to resolve these very contradictions. Be more speculative and hypothesis-driven in your 'synergies' section.`
 };
 
+
+export const buildQueryEnhancementPrompt = (
+    rawQuery: string
+): { systemInstruction: string; userPrompt: string } => {
+    const systemInstruction = `You are an expert multilingual research assistant. Your task is to take a user's query, which may be in any language or be a simple keyword, and transform it into a high-quality, specific search query suitable for scientific databases like PubMed.
+
+**Your process:**
+1.  **Detect Language:** Identify the language of the user's query.
+2.  **Translate to English:** If the query is not in English, accurately translate it to technical English.
+3.  **Enhance for Scientific Search:** Refine the English query. Make it more specific, use precise scientific terminology, and formulate it to maximize relevance from academic search engines. For example, "aging cure" should become "therapeutic interventions for cellular senescence and aging".
+4.  **Output JSON:** Your output MUST be a JSON object with a single key: "enhancedQuery".
+
+**Example Input:** "лекарство от старости"
+**Example Output:**
+{
+  "enhancedQuery": "Therapeutic interventions and drug discovery for aging and age-related diseases"
+}
+
+**Example Input:** "senolytics"
+**Example Output:**
+{
+  "enhancedQuery": "Senolytic compounds for the clearance of senescent cells in aging"
+}
+
+${RAW_JSON_FORMATTING_INSTRUCTIONS}`;
+
+    const userPrompt = `Please process the following user query: "${rawQuery}"`;
+    return { systemInstruction, userPrompt };
+};
 
 export const buildRelevanceFilterPrompt = (
     query: string,
@@ -303,12 +331,12 @@ ${JSON_IN_MARKDOWN_FORMATTING_INSTRUCTIONS}`;
 };
 
 export const buildAgentPrompts = (
-    query: string,
     agentType: AgentType,
     workspaceState: WorkspaceState,
     lens: AnalysisLens = 'Balanced',
     tolerance: ContradictionTolerance = 'Medium'
 ): { systemInstruction: string; userPrompt: string } => {
+    const query = workspaceState.topic; // Use the (potentially enhanced) topic from the workspace state
     switch (agentType) {
         case AgentType.InnovationAgent:
             return buildInnovationAgentPrompts(query, lens, workspaceState);

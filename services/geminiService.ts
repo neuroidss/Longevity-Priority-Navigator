@@ -1,12 +1,11 @@
 
-
 import { GoogleGenAI } from "@google/genai";
 import { 
     type AgentResponse, type GroundingSource, 
     type ModelDefinition, AgentType, WorkspaceState, AnalysisLens, SourceStatus,
     SearchDataSource, type SearchResult, ContradictionTolerance, ModelProvider
 } from '../types';
-import { buildAgentPrompts, buildChatPrompt, buildDiscoverAndValidatePrompt, buildFilterBioRxivFeedPrompt, buildRelevanceFilterPrompt } from './agentPrompts';
+import { buildAgentPrompts, buildChatPrompt, buildDiscoverAndValidatePrompt, buildFilterBioRxivFeedPrompt, buildQueryEnhancementPrompt, buildRelevanceFilterPrompt } from './agentPrompts';
 import { performFederatedSearch, isPrimarySourceDomain, performGoogleSearch, enrichSources } from './searchService';
 
 const MAX_SOURCES_FOR_ANALYSIS = 40; // A safer limit to avoid context overflows
@@ -244,6 +243,36 @@ export class ApiClient {
         
         this.addLog(`[GoogleAI] Received valid response.`);
         return response;
+    }
+
+    public async enhanceQuery(rawQuery: string, model: ModelDefinition): Promise<string> {
+        this.addLog(`[enhanceQuery] Starting for query: "${rawQuery}"`);
+        try {
+            const { systemInstruction, userPrompt } = buildQueryEnhancementPrompt(rawQuery);
+            let responseText: string;
+
+            if (model.provider === ModelProvider.Ollama || model.provider === ModelProvider.OpenAI_API) {
+                responseText = model.provider === ModelProvider.Ollama
+                    ? await this.callOllamaAPI(model.id, systemInstruction, userPrompt, true)
+                    : await this.callOpenAICompatibleAPI(systemInstruction, userPrompt, true);
+            } else { // Google AI
+                const response = await this.callGoogleAI(model.id, systemInstruction, userPrompt, false);
+                responseText = response.text;
+            }
+
+            const jsonText = parseJsonFromText(responseText, this.addLog);
+            const data = JSON.parse(jsonText);
+
+            if (data.enhancedQuery && typeof data.enhancedQuery === 'string') {
+                return data.enhancedQuery;
+            } else {
+                throw new Error("AI response did not contain a valid 'enhancedQuery' string.");
+            }
+        } catch (e) {
+            const message = e instanceof Error ? e.message : 'Unknown error during query enhancement';
+            this.addLog(`[enhanceQuery] ERROR: ${message}. Returning original query.`);
+            return rawQuery;
+        }
     }
 
     private async filterBioRxivFeedWithAI(query: string, feedItems: SearchResult[], model: ModelDefinition, limit: number): Promise<SearchResult[]> {
@@ -598,17 +627,16 @@ export class ApiClient {
     };
 
     public async generateAnalysisFromContext(
-        query: string, 
         agentType: AgentType, 
         model: ModelDefinition,
         workspaceState: WorkspaceState,
         lens?: AnalysisLens,
         tolerance?: ContradictionTolerance,
     ): Promise<AgentResponse> {
-        this.addLog(`[generateAnalysis] Starting... Agent: ${agentType}, Model: ${model.name}, Query: "${query}"`);
+        this.addLog(`[generateAnalysis] Starting... Agent: ${agentType}, Model: ${model.name}, Query: "${workspaceState.topic}"`);
 
         try {
-            const { systemInstruction, userPrompt } = buildAgentPrompts(query, agentType, workspaceState, lens, tolerance);
+            const { systemInstruction, userPrompt } = buildAgentPrompts(agentType, workspaceState, lens, tolerance);
             let jsonText: string;
 
             if (model.provider === ModelProvider.Ollama || model.provider === ModelProvider.OpenAI_API) {

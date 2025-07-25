@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { type WorkspaceState, AgentType, type ChatMessage, type AgentResponse, type KnowledgeGraph, type KnowledgeGraphNode, type AnalysisLens, GroundingSource, SourceStatus, ContradictionTolerance, ModelProvider, MarketInnovationAnalysis } from '../types';
 import { ApiClient } from '../services/geminiService';
@@ -152,6 +151,7 @@ export const useWorkspaceManager = ({ settings, apiClient, addLog, storageKey }:
         setHasSearched(true); 
 
         let currentWorkspace = workspace;
+        let processedTopic = topic;
         
         // Clear previous analysis if it's a new primary analysis
         if (!isInnovationAgent) {
@@ -166,17 +166,35 @@ export const useWorkspaceManager = ({ settings, apiClient, addLog, storageKey }:
         }
         
         try {
+            // --- Step 1: Query Pre-processing (if enabled) ---
+            if (settings.preprocessQuery && !isInnovationAgent) {
+                setLoadingMessage("Enhancing search query...");
+                addLog(`[Query Enhancer] Original query: "${topic}"`);
+                try {
+                    const enhancedQuery = await apiClient.enhanceQuery(topic, settings.model);
+                    addLog(`[Query Enhancer] Enhanced query: "${enhancedQuery}"`);
+                    processedTopic = enhancedQuery;
+                    setTopic(enhancedQuery); // Update UI to show the enhanced query
+                    if (currentWorkspace) currentWorkspace.topic = enhancedQuery;
+                } catch (e) {
+                    const message = e instanceof Error ? e.message : "Unknown error";
+                    addLog(`[Query Enhancer] WARN: Query enhancement failed. Using original query. Error: ${message}`);
+                    // Proceed with the original topic
+                }
+            }
+
             let agentResponse: AgentResponse;
 
             if(isInnovationAgent && currentWorkspace) {
                 setLoadingMessage("Analyzing market & innovation potential...");
+                currentWorkspace.topic = processedTopic; // Ensure workspace has latest topic
                 agentResponse = await apiClient.generateAnalysisFromContext(
-                    topic, agentType, settings.model, currentWorkspace, lens, tolerance
+                    agentType, settings.model, currentWorkspace, lens, tolerance
                 );
 
             } else {
                  const validatedSources = await apiClient.discoverAndValidateSources(
-                    topic, 
+                    processedTopic, 
                     settings.model, 
                     setLoadingMessage,
                     settings.dataSourceLimits
@@ -184,6 +202,7 @@ export const useWorkspaceManager = ({ settings, apiClient, addLog, storageKey }:
                 
                 if (currentWorkspace) {
                     currentWorkspace.sources = validatedSources;
+                    currentWorkspace.topic = processedTopic;
                     setWorkspace({ ...currentWorkspace });
                 }
                 
@@ -193,12 +212,12 @@ export const useWorkspaceManager = ({ settings, apiClient, addLog, storageKey }:
 
                 setLoadingMessage("Synthesizing analysis from primary sources...");
                 agentResponse = await apiClient.generateAnalysisFromContext(
-                    topic, agentType, settings.model, { ...currentWorkspace!, sources: validatedSources }, lens, tolerance
+                    agentType, settings.model, { ...currentWorkspace!, sources: validatedSources }, lens, tolerance
                 );
             }
             
             // --- Finalize Workspace ---
-            const finalWorkspace = createWorkspaceState(topic, currentWorkspace?.sources || [], agentResponse, currentWorkspace);
+            const finalWorkspace = createWorkspaceState(processedTopic, currentWorkspace?.sources || [], agentResponse, currentWorkspace);
             setWorkspace(finalWorkspace);
             
             if (!isInnovationAgent) {
@@ -208,13 +227,14 @@ export const useWorkspaceManager = ({ settings, apiClient, addLog, storageKey }:
             }
             
             const stateToSave = {
-                topic,
+                topic: processedTopic,
                 workspace: finalWorkspace,
                 hasSearched: true,
                 chatHistory: isInnovationAgent ? chatHistory : [], // Preserve chat history for innovation agent
                 model: settings.model,
                 contradictionTolerance: tolerance,
                 dataSourceLimits: settings.dataSourceLimits,
+                preprocessQuery: settings.preprocessQuery,
             };
 
             localStorage.setItem(storageKey, JSON.stringify(stateToSave));
@@ -228,7 +248,7 @@ export const useWorkspaceManager = ({ settings, apiClient, addLog, storageKey }:
             setIsLoading(false);
             setLoadingMessage('');
         }
-    }, [topic, settings, addLog, storageKey, apiClient, workspace]);
+    }, [topic, settings, addLog, storageKey, apiClient, workspace, setTopic]);
 
     return {
         topic,

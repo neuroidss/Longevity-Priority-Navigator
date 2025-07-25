@@ -1,5 +1,4 @@
 
-
 import { useState, useEffect } from 'react';
 import { type ModelDefinition, ContradictionTolerance, SearchDataSource, ModelProvider } from '../types';
 import { SUPPORTED_MODELS } from '../constants';
@@ -25,6 +24,7 @@ export const useAppSettings = (addLog: (msg: string) => void, storageKey: string
 
   const [contradictionTolerance, setContradictionTolerance] = useState<ContradictionTolerance>('Medium');
   const [dataSourceLimits, setDataSourceLimits] = useState<Record<SearchDataSource, number>>(DEFAULT_DATA_SOURCE_LIMITS);
+  const [preprocessQuery, setPreprocessQuery] = useState<boolean>(true);
 
   useEffect(() => {
     const savedKey = sessionStorage.getItem('google-api-key');
@@ -56,6 +56,9 @@ export const useAppSettings = (addLog: (msg: string) => void, storageKey: string
             if (savedState.openAIBaseUrl) setOpenAIBaseUrl(savedState.openAIBaseUrl);
             if (savedState.openAIModelName) setOpenAIModelName(savedState.openAIModelName);
             if (savedState.openAIApiKey) setOpenAIApiKey(savedState.openAIApiKey);
+            if (typeof savedState.preprocessQuery === 'boolean') {
+                setPreprocessQuery(savedState.preprocessQuery);
+            }
         }
     } catch (error) {
         addLog(`Failed to load settings from localStorage: ${error}. Using defaults.`);
@@ -102,6 +105,18 @@ export const useAppSettings = (addLog: (msg: string) => void, storageKey: string
       addLog(`Data source limit for ${source} updated to: ${limit}`);
   };
 
+  const handlePreprocessQueryChange = (enabled: boolean) => {
+      setPreprocessQuery(enabled);
+      addLog(`AI Query Pre-processing ${enabled ? 'enabled' : 'disabled'}.`);
+      try {
+            const currentState = JSON.parse(localStorage.getItem(storageKey) || '{}');
+            currentState.preprocessQuery = enabled;
+            localStorage.setItem(storageKey, JSON.stringify(currentState));
+        } catch (e) {
+            addLog("Could not save query pre-processing setting to local storage.")
+        }
+  };
+
   return {
     model,
     setModel,
@@ -117,5 +132,7 @@ export const useAppSettings = (addLog: (msg: string) => void, storageKey: string
     setContradictionTolerance: handleToleranceChange,
     dataSourceLimits,
     setDataSourceLimits: handleDataSourceLimitChange,
+    preprocessQuery,
+    setPreprocessQuery: handlePreprocessQueryChange,
   };
 };

@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { AgentType, type AnalysisLens, type ChatMessage, type KnowledgeGraphNode, type GroundingSource, type WorkspaceState, SourceStatus, ContradictionTolerance, ModelProvider, SearchDataSource } from './types';
 import { ApiClient } from './services/geminiService';
@@ -94,7 +93,7 @@ const App: React.FC = () => {
       model, setModel, apiKey, setApiKey, contradictionTolerance, 
       setContradictionTolerance, dataSourceLimits, setDataSourceLimits,
       openAIBaseUrl, setOpenAIBaseUrl, openAIModelName, setOpenAIModelName,
-      openAIApiKey, setOpenAIApiKey
+      openAIApiKey, setOpenAIApiKey, preprocessQuery, setPreprocessQuery,
     } = settings;
     const { usageState, setApiCallLimit, checkAndIncrement } = useApiUsageManager(addLog);
 
@@ -145,6 +144,7 @@ const App: React.FC = () => {
             chatHistory: ch,
             contradictionTolerance: ct,
             dataSourceLimits,
+            preprocessQuery,
         };
         localStorage.setItem(APP_STATE_STORAGE_KEY, JSON.stringify(stateToSave));
     };
@@ -222,6 +222,8 @@ const App: React.FC = () => {
                     openAIApiKey={openAIApiKey}
                     onOpenAIApiKeyChange={setOpenAIApiKey}
                     isAnalysisComplete={isAnalysisComplete}
+                    preprocessQuery={preprocessQuery}
+                    onPreprocessQueryChange={setPreprocessQuery}
                 />
                 <Dashboard
                     activeTab={activeTab}
