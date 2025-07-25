@@ -1,42 +1,41 @@
 
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { type WorkspaceState, AgentType, type ChatMessage, type AgentResponse, type KnowledgeGraph, type KnowledgeGraphNode, type AnalysisLens, GroundingSource, SourceStatus, ContradictionTolerance, ModelProvider } from '../types';
+import { type WorkspaceState, AgentType, type ChatMessage, type AgentResponse, type KnowledgeGraph, type KnowledgeGraphNode, type AnalysisLens, GroundingSource, SourceStatus, ContradictionTolerance, ModelProvider, MarketInnovationAnalysis } from '../types';
 import { ApiClient } from '../services/geminiService';
 import { useAppSettings } from './useAppSettings'; 
 
 const createWorkspaceState = (
     currentTopic: string,
     validatedSources: GroundingSource[],
-    agentResponse: AgentResponse | null
+    agentResponse: AgentResponse | null,
+    existingWorkspace?: WorkspaceState | null
 ): WorkspaceState => {
-    if (!agentResponse) {
-        return { 
-            topic: currentTopic, 
-            sources: validatedSources, 
-            knowledgeGraph: null, 
-            synthesis: null,
-            researchOpportunities: [],
-            contradictions: [],
-            synergies: [],
-            keyQuestion: null,
-            trendAnalysis: null,
-            timestamp: Date.now() 
-        };
-    }
-    
-    return {
+    const base = {
         topic: currentTopic,
         sources: validatedSources,
-        knowledgeGraph: agentResponse.knowledgeGraph || null,
-        synthesis: agentResponse.synthesis || null,
-        researchOpportunities: agentResponse.researchOpportunities || [],
-        contradictions: agentResponse.contradictions || [],
-        synergies: agentResponse.synergies || [],
-        keyQuestion: agentResponse.keyQuestion || null,
-        trendAnalysis: agentResponse.trendAnalysis || null,
+        knowledgeGraph: agentResponse?.knowledgeGraph || existingWorkspace?.knowledgeGraph || null,
+        synthesis: agentResponse?.synthesis || existingWorkspace?.synthesis || null,
+        researchOpportunities: agentResponse?.researchOpportunities || existingWorkspace?.researchOpportunities || [],
+        contradictions: agentResponse?.contradictions || existingWorkspace?.contradictions || [],
+        synergies: agentResponse?.synergies || existingWorkspace?.synergies || [],
+        keyQuestion: agentResponse?.keyQuestion || existingWorkspace?.keyQuestion || null,
+        trendAnalysis: agentResponse?.trendAnalysis || existingWorkspace?.trendAnalysis || null,
+        marketInnovationAnalysis: agentResponse?.marketInnovationAnalysis || existingWorkspace?.marketInnovationAnalysis || null,
         timestamp: Date.now()
     };
+
+    // If it's an innovation agent, we merge, otherwise we replace
+    if (agentResponse?.marketInnovationAnalysis) {
+        return {
+            ...existingWorkspace,
+            ...base,
+            topic: currentTopic, // ensure topic is updated
+            sources: validatedSources, // ensure sources are updated
+        } as WorkspaceState;
+    }
+
+    return base;
 };
 
 const sanitizeWorkspaceState = (loadedWorkspace: any): WorkspaceState | null => {
@@ -65,6 +64,7 @@ const sanitizeWorkspaceState = (loadedWorkspace: any): WorkspaceState | null => 
         synergies: Array.isArray(loadedWorkspace.synergies) ? loadedWorkspace.synergies : [],
         keyQuestion: loadedWorkspace.keyQuestion || null,
         trendAnalysis: loadedWorkspace.trendAnalysis || null,
+        marketInnovationAnalysis: loadedWorkspace.marketInnovationAnalysis || null,
         timestamp: loadedWorkspace.timestamp || Date.now(),
     };
 };
@@ -122,6 +122,7 @@ export const useWorkspaceManager = ({ settings, apiClient, addLog, storageKey }:
         agentType: AgentType,
         tolerance: ContradictionTolerance,
         setActiveTab: React.Dispatch<React.SetStateAction<'priorities' | 'knowledge_web' | 'sources'>>,
+        chatHistory: ChatMessage[],
         setChatHistory: React.Dispatch<React.SetStateAction<ChatMessage[]>>, 
         setSelectedNode: React.Dispatch<React.SetStateAction<KnowledgeGraphNode | null>>
     ) => {
@@ -133,54 +134,84 @@ export const useWorkspaceManager = ({ settings, apiClient, addLog, storageKey }:
             setError("Please enter your Google AI API Key in the settings to use this model.");
             return;
         }
-        if (Object.values(settings.dataSourceLimits).every(limit => limit === 0)) {
+
+        const isInnovationAgent = agentType === AgentType.InnovationAgent;
+
+        if (isInnovationAgent && (!workspace || !workspace.knowledgeGraph)) {
+            setError("Please run 'Analyze Current State' or 'Analyze Trends' first to build a knowledge base before analyzing for innovation.");
+            return;
+        }
+
+        if (!isInnovationAgent && Object.values(settings.dataSourceLimits).every(limit => limit === 0)) {
             setError("Please enable at least one data source by setting its result limit greater than 0 in the Advanced Settings.");
             return;
         }
 
         setIsLoading(true);
         setError(null);
-        setChatHistory([]);
-        setSelectedNode(null);
-        setActiveTab('sources');
-        setHasSearched(true); // Indicate that a search has been initiated
+        setHasSearched(true); 
 
-        let tempWorkspace: WorkspaceState = {
-            topic, sources: [], knowledgeGraph: null, synthesis: null, researchOpportunities: [],
-            contradictions: [], synergies: [], keyQuestion: null, trendAnalysis: null, timestamp: Date.now()
-        };
-        setWorkspace({ ...tempWorkspace });
+        let currentWorkspace = workspace;
+        
+        // Clear previous analysis if it's a new primary analysis
+        if (!isInnovationAgent) {
+             setChatHistory([]);
+             setSelectedNode(null);
+             setActiveTab('sources');
+             currentWorkspace = {
+                topic, sources: [], knowledgeGraph: null, synthesis: null, researchOpportunities: [],
+                contradictions: [], synergies: [], keyQuestion: null, trendAnalysis: null, marketInnovationAnalysis: null, timestamp: Date.now()
+            };
+            setWorkspace({ ...currentWorkspace });
+        }
         
         try {
-            const validatedSources = await apiClient.discoverAndValidateSources(
-                topic, 
-                settings.model, 
-                setLoadingMessage,
-                settings.dataSourceLimits
-            );
-            tempWorkspace.sources = validatedSources;
-            setWorkspace({ ...tempWorkspace });
-            
-            if (validatedSources.length === 0) {
-                throw new Error("The AI agent could not find and validate any sources for the topic.");
-            }
+            let agentResponse: AgentResponse;
 
-            // --- Stage 2: Generate Analysis ---
-            setLoadingMessage("Synthesizing analysis from primary sources...");
-            const agentResponse = await apiClient.generateAnalysisFromContext(
-                topic, agentType, settings.model, validatedSources, lens, tolerance
-            );
+            if(isInnovationAgent && currentWorkspace) {
+                setLoadingMessage("Analyzing market & innovation potential...");
+                agentResponse = await apiClient.generateAnalysisFromContext(
+                    topic, agentType, settings.model, currentWorkspace, lens, tolerance
+                );
+
+            } else {
+                 const validatedSources = await apiClient.discoverAndValidateSources(
+                    topic, 
+                    settings.model, 
+                    setLoadingMessage,
+                    settings.dataSourceLimits
+                );
+                
+                if (currentWorkspace) {
+                    currentWorkspace.sources = validatedSources;
+                    setWorkspace({ ...currentWorkspace });
+                }
+                
+                if (validatedSources.length === 0) {
+                    throw new Error("The AI agent could not find and validate any sources for the topic.");
+                }
+
+                setLoadingMessage("Synthesizing analysis from primary sources...");
+                agentResponse = await apiClient.generateAnalysisFromContext(
+                    topic, agentType, settings.model, { ...currentWorkspace!, sources: validatedSources }, lens, tolerance
+                );
+            }
             
             // --- Finalize Workspace ---
-            const finalWorkspace = createWorkspaceState(topic, validatedSources, agentResponse);
+            const finalWorkspace = createWorkspaceState(topic, currentWorkspace?.sources || [], agentResponse, currentWorkspace);
             setWorkspace(finalWorkspace);
-            setActiveTab(agentType === AgentType.TrendAnalyzer ? 'knowledge_web' : 'priorities');
+            
+            if (!isInnovationAgent) {
+                setActiveTab(agentType === AgentType.TrendAnalyzer ? 'knowledge_web' : 'priorities');
+            } else {
+                 setActiveTab('priorities'); // Switch to priorities to show the new market analysis
+            }
             
             const stateToSave = {
                 topic,
                 workspace: finalWorkspace,
                 hasSearched: true,
-                chatHistory: [],
+                chatHistory: isInnovationAgent ? chatHistory : [], // Preserve chat history for innovation agent
                 model: settings.model,
                 contradictionTolerance: tolerance,
                 dataSourceLimits: settings.dataSourceLimits,
@@ -192,12 +223,12 @@ export const useWorkspaceManager = ({ settings, apiClient, addLog, storageKey }:
             const message = e instanceof Error ? e.message : 'An unknown error occurred.';
             setError(message);
             addLog(`ERROR during agent dispatch: ${message}`);
-            setWorkspace(tempWorkspace); // Show the partially completed workspace on error
+            if (currentWorkspace) setWorkspace(currentWorkspace);
         } finally {
             setIsLoading(false);
             setLoadingMessage('');
         }
-    }, [topic, settings, addLog, storageKey, apiClient]);
+    }, [topic, settings, addLog, storageKey, apiClient, workspace]);
 
     return {
         topic,

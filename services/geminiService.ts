@@ -67,6 +67,7 @@ const parseAgentResponse = (jsonText: string, agentType: AgentType, addLog: (msg
             }));
         }
         if (data.trendAnalysis) response.trendAnalysis = data.trendAnalysis;
+        if (data.marketInnovationAnalysis) response.marketInnovationAnalysis = data.marketInnovationAnalysis;
         if (data.contradictions) {
             response.contradictions = data.contradictions.map((c: any, index: number) => ({ id: `con-${index}-${Math.random()}`, statement: c.statement }));
         }
@@ -600,14 +601,14 @@ export class ApiClient {
         query: string, 
         agentType: AgentType, 
         model: ModelDefinition,
-        validatedSources: GroundingSource[],
+        workspaceState: WorkspaceState,
         lens?: AnalysisLens,
         tolerance?: ContradictionTolerance,
     ): Promise<AgentResponse> {
         this.addLog(`[generateAnalysis] Starting... Agent: ${agentType}, Model: ${model.name}, Query: "${query}"`);
 
         try {
-            const { systemInstruction, userPrompt } = buildAgentPrompts(query, agentType, validatedSources, lens, tolerance);
+            const { systemInstruction, userPrompt } = buildAgentPrompts(query, agentType, workspaceState, lens, tolerance);
             let jsonText: string;
 
             if (model.provider === ModelProvider.Ollama || model.provider === ModelProvider.OpenAI_API) {

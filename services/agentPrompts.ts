@@ -3,6 +3,25 @@
 import { AgentType, type WorkspaceState, type AnalysisLens, type GroundingSource, type SearchResult, ContradictionTolerance } from '../types';
 import { LENS_DEFINITIONS } from "../constants";
 
+const JSON_IN_MARKDOWN_FORMATTING_INSTRUCTIONS = `
+**JSON FORMATTING RULES:**
+- Your entire response MUST consist of ONLY a single, valid JSON object enclosed in a markdown code block (\`\`\`json ... \`\`\`).
+- The JSON object must be parseable by a standard JSON parser.
+- Ensure all string values are properly escaped (e.g., use \\" for a double quote character within a string).
+- Do NOT use trailing commas.
+- Do not include any other text, explanations, or apologies outside the markdown code block.
+`;
+
+const RAW_JSON_FORMATTING_INSTRUCTIONS = `
+**JSON FORMATTING RULES:**
+- Your entire response MUST consist of ONLY a single, valid JSON object.
+- Do NOT use markdown code blocks or any other formatting.
+- The JSON object must be parseable by a standard JSON parser.
+- Ensure all string values are properly escaped (e.g., use \\" for a double quote character within a string).
+- Do NOT use trailing commas.
+- Do not include any other text, explanations, or apologies.
+`;
+
 const LENS_INSTRUCTIONS: Record<AnalysisLens, string> = {
     'Balanced': "Provide a balanced perspective, mixing near-term applicability with foundational research. Your proposed research opportunities should reflect this balance.",
     'High-Risk/High-Reward': "Focus exclusively on high-risk, high-reward strategies. Prioritize unconventional, paradigm-shifting hypotheses that could lead to major breakthroughs, even if they challenge existing dogma. Avoid incremental improvements.",
@@ -28,7 +47,7 @@ export const buildRelevanceFilterPrompt = (
 
     const userPrompt = `Research Topic: "${query}"\n\nArticle List:\n\n${context}`;
 
-    const systemInstruction = `You are a JSON-generating relevance filter. Your response MUST be a single, valid JSON object and nothing else.
+    const systemInstruction = `You are a JSON-generating relevance filter.
 
 **Your Task:**
 1. You are given a research topic and a list of articles, each with a unique "index".
@@ -42,10 +61,7 @@ export const buildRelevanceFilterPrompt = (
   "relevantArticleIndices": [1, 5, 8]
 }
 
-**Rules:**
-- If no articles are relevant, return an empty array: { "relevantArticleIndices": [] }.
-- Do NOT use markdown code blocks.
-- Do NOT add any explanation or text outside the single JSON object.`;
+${RAW_JSON_FORMATTING_INSTRUCTIONS}`;
     return { systemInstruction, userPrompt };
 };
 
@@ -65,8 +81,6 @@ export const buildDiscoverAndValidatePrompt = (
 1.  **Summarize:** Create a concise, accurate summary of its core scientific claims, methods, or results. Since the provided <SNIPPET> may be minimal or a placeholder, you MUST infer the summary from the <TITLE> and the context of the <URL>.
 2.  **Assess Reliability:** Evaluate the likely reliability of the source based on all provided information and assign a numerical score.
 
-Your output MUST be a single, valid JSON object enclosed in a markdown code block (\`\`\`json ... \`\`\`).
-
 The JSON object must have the following structure:
 {
   "sources": [{
@@ -80,7 +94,7 @@ The JSON object must have the following structure:
 
 **CRITICAL INSTRUCTIONS FOR RELIABILITY ASSESSMENT:**
 - **Base your assessment on the <TITLE>, <URL>, and <SNIPPET>.** Do not use external knowledge.
-- **The URL domain is a STRONG signal.** A URL from 'nature.com', 'cell.com', 'pubmed.ncbi.nlm.nih.gov', 'biorxiv.org', or other known scientific publishers indicates a primary source.
+- **The URL domain is a STRONG signal.** A URL from 'nature.com', 'cell.com', 'science.org', 'pubmed.ncbi.nlm.nih.gov', 'biorxiv.org', or other known scientific publishers indicates a primary source.
 - **The tag '[DOI Found]' at the start of a <SNIPPET> is a VERY STRONG positive signal.** It confirms the source is a canonical scientific article. You should significantly increase the reliability score if you see this tag.
 - **High Score (0.8-1.0):** URL is from a top-tier peer-reviewed journal (e.g., Nature, Cell, Science) AND/OR the snippet contains '[DOI Found]'. Title is specific and scientific.
 - **Medium Score (0.5-0.7):** URL is from a known preprint server (e.g., bioRxiv) or a mid-tier journal. Title is relevant and plausible.
@@ -90,11 +104,69 @@ The JSON object must have the following structure:
 **GENERAL INSTRUCTIONS:**
 - Create a summary and reliability assessment for EVERY source provided. Do not omit any.
 - When creating the 'summary' in your JSON output, you MUST OMIT the '[DOI Found]' tag. Do not include it in the final summary text.
-- Your entire response MUST consist of ONLY the JSON object within a markdown code block. Do not include any other text or explanations.`;
+
+${JSON_IN_MARKDOWN_FORMATTING_INSTRUCTIONS}`;
 
     return { systemInstruction, userPrompt };
 };
 
+const buildInnovationAgentPrompts = (
+    query: string,
+    lens: AnalysisLens,
+    workspaceState: WorkspaceState
+): { systemInstruction: string; userPrompt: string } => {
+    const context = `
+<TOPIC>${workspaceState.topic}</TOPIC>
+<KEY_QUESTION>${workspaceState.keyQuestion || 'Not available'}</KEY_QUESTION>
+<SYNTHESIS>${workspaceState.synthesis || 'Not available'}</SYNTHESIS>
+<KNOWLEDGE_GRAPH>
+Nodes:
+${workspaceState.knowledgeGraph?.nodes.map(n => `- ${n.label} (${n.type})`).join('\n') || 'No nodes'}
+Edges:
+${workspaceState.knowledgeGraph?.edges.map(e => `- ${e.source} -> ${e.target} (${e.label})`).join('\n') || 'No edges'}
+</KNOWLEDGE_GRAPH>
+    `;
+    const userPrompt = `Based on the provided research summary for "${query}", analyze the market and innovation potential.\n\n${context}`;
+
+    const lensInstruction = LENS_INSTRUCTIONS[lens] || LENS_INSTRUCTIONS['Balanced'];
+    const lensName = LENS_DEFINITIONS.find(l => l.id === lens)?.name || 'Balanced';
+
+    const systemInstruction = `You are a visionary biotech strategist and venture analyst. You are given a deep scientific analysis of a research area and your task is to identify concrete, marketable product concepts and commercialization strategies.
+
+Your analysis is guided by **Analysis Lens: ${lensName}**. Directive: ${lensInstruction}
+
+The JSON object must have the following structure:
+{
+  "marketInnovationAnalysis": {
+    "summary": "string (High-level summary of the market landscape, key opportunities, and strategic recommendations. DO NOT use citations.)",
+    "targetAudienceSegments": [
+      {
+        "segmentName": "string (e.g., 'Proactive Health Consumers', 'Clinicians Treating Frailty')",
+        "description": "string (Detailed description of this audience and their needs.)",
+        "marketSize": "string (e.g., 'Niche', 'Growing', 'Large')"
+      }
+    ],
+    "productConcepts": [
+      {
+        "conceptName": "string (A catchy, descriptive name for the product.)",
+        "description": "string (What the product is, what it does, and its value proposition.)",
+        "type": "string (Must be one of: 'Diagnostic', 'Therapeutic', 'Platform', 'Consumer')",
+        "readinessLevel": "string (Must be one of: 'Concept', 'Prototype', 'MVP', 'Market-Ready')"
+      }
+    ],
+    "regulatoryHurdles": ["string (List of potential regulatory challenges, e.g., 'FDA approval for novel biomarker'.)"],
+    "keyCompetitors": ["string (List of potential companies or research groups in this space.)"]
+  }
+}
+
+**CRITICAL INSTRUCTIONS:**
+- Base your analysis **exclusively** on the provided context. Do NOT use external knowledge or search.
+- Be creative and concrete. The product concepts should be plausible and linked to the scientific context.
+- The 'summary' should be a strategic overview, not a rehash of the scientific synthesis.
+
+${JSON_IN_MARKDOWN_FORMATTING_INSTRUCTIONS}`;
+    return { systemInstruction, userPrompt };
+};
 
 const buildKnowledgeNavigatorPrompts = (
     query: string,
@@ -122,8 +194,6 @@ Your analysis is guided by TWO main directives:
 Your primary task is to analyze the provided scientific source content to identify and prioritize the most critical research directions. You MUST factor in the provided **RELIABILITY_SCORE** for each source and follow your Contradiction Strategy. High-reliability sources should form the foundation of your analysis, but your tolerance level dictates how you handle disagreement.
 
 When you use information from a source, you MUST cite it by including a citation in your text, for example: "This is supported by evidence [1]". The number corresponds to the 1-based index of the source provided in the prompt (e.g., <SOURCE 1> is [1]).
-
-Your output MUST be a single, valid JSON object enclosed in a markdown code block (\`\`\`json ... \`\`\`). Do not include any other text or explanation outside of this JSON block.
 
 The JSON object must have the following structure:
 {
@@ -158,8 +228,8 @@ The JSON object must have the following structure:
 - DO NOT include a "sources" array in your JSON output.
 - Every node in the knowledge graph must connect to at least one other node.
 - For each research opportunity, you MUST specify the 'lens' property with the value '${lens}'.
-- Ensure the final output is a single, valid JSON object. Pay close attention to commas, brackets, and quotes. All string values containing special characters must be properly escaped.
-- Your entire response MUST consist of ONLY the JSON object within a markdown code block.`;
+
+${JSON_IN_MARKDOWN_FORMATTING_INSTRUCTIONS}`;
 
     return { systemInstruction, userPrompt };
 };
@@ -190,8 +260,6 @@ Your analysis is guided by TWO main directives:
 Your primary task is to simulate a "temporal snapshot" analysis to identify key shifts, emerging concepts, and changes in scientific focus based on the provided sources. You MUST factor in the provided **RELIABILITY_SCORE** for each source and follow your Contradiction Strategy.
 
 When you use information from a source, you MUST cite it by including a citation in your text, for example: "This trend is evident in recent work [1]". The number corresponds to the 1-based index of the source provided in the prompt.
-
-Your output MUST be a single, valid JSON object enclosed in a markdown code block (\`\`\`json ... \`\`\`). Do not include any other text or explanation outside of this JSON block.
 
 The JSON object must have the following structure:
 {
@@ -228,8 +296,8 @@ The JSON object must have the following structure:
 - For each node in the \`knowledgeGraph\`, you MUST assign a \`zone\` property: 'fading', 'emerging', or 'connecting'. This is vital for the visual output.
 - The **trendAnalysis** section is CRITICAL and must be thoroughly populated. For each concept in \`emergingConcepts\` and \`fadingConcepts\`, you MUST provide the \`relatedNodeIds\` from the \`knowledgeGraph\`.
 - For each research opportunity, you MUST specify the 'lens' property with the value '${lens}'.
-- Ensure the final output is a single, valid JSON object.
-- Your entire response MUST consist of ONLY the JSON object within a markdown code block.`;
+
+${JSON_IN_MARKDOWN_FORMATTING_INSTRUCTIONS}`;
 
     return { systemInstruction, userPrompt };
 };
@@ -237,16 +305,18 @@ The JSON object must have the following structure:
 export const buildAgentPrompts = (
     query: string,
     agentType: AgentType,
-    sources: GroundingSource[],
+    workspaceState: WorkspaceState,
     lens: AnalysisLens = 'Balanced',
     tolerance: ContradictionTolerance = 'Medium'
 ): { systemInstruction: string; userPrompt: string } => {
     switch (agentType) {
+        case AgentType.InnovationAgent:
+            return buildInnovationAgentPrompts(query, lens, workspaceState);
         case AgentType.TrendAnalyzer:
-            return buildTrendAgentPrompts(query, lens, tolerance, sources);
+            return buildTrendAgentPrompts(query, lens, tolerance, workspaceState.sources);
         case AgentType.KnowledgeNavigator:
         default:
-            return buildKnowledgeNavigatorPrompts(query, lens, tolerance, sources);
+            return buildKnowledgeNavigatorPrompts(query, lens, tolerance, workspaceState.sources);
     }
 };
 
@@ -301,7 +371,6 @@ export const buildFilterBioRxivFeedPrompt = (
 - Each string in the array must be the exact URL of one of the top ${limit} relevant articles from the provided list. The array should contain at most ${limit} items.
 - If no articles are relevant, return an empty array: { "relevantArticleUrls": [] }.
 - Do not include any articles that are only tangentially related. Focus on direct relevance and rank them.
-- Do not add any explanation or text outside the JSON block.
 
 Example response (for a limit of 2):
 \`\`\`json
@@ -311,7 +380,9 @@ Example response (for a limit of 2):
     "https://www.biorxiv.org/content/10.1101/2023.10.25.789012v2"
   ]
 }
-\`\`\``;
+\`\`\`
+
+${JSON_IN_MARKDOWN_FORMATTING_INSTRUCTIONS}`;
 
     return { systemInstruction, userPrompt };
 };

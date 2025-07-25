@@ -197,3 +197,28 @@ export const WebIcon = ({className = "h-5 w-5"}) => (
       <path strokeLinecap="round" strokeLinejoin="round" d="M12 21a9 9 0 0 0 0-18m0 18a9.003 9.003 0 0 0 8.046-4.91M3.954 16.09a9.003 9.003 0 0 0 8.046 4.91m0-18a9.003 9.003 0 0 0-8.046 4.91" />
     </svg>
 );
+
+export const UsersIcon = ({className="h-8 w-8"}) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 0 0 3.741-.479 3 3 0 0 0-4.682-2.72m-7.5-2.962a3.75 3.75 0 1 0-7.5 0 3.75 3.75 0 0 0 7.5 0ZM10.5 18.75a4.5 4.5 0 1 1 9 0 4.5 4.5 0 0 1-9 0Z" />
+    </svg>
+);
+
+export const RocketLaunchIcon = ({className="h-8 w-8"}) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M15.59 14.37a6 6 0 0 1-5.84 7.38v-4.82m5.84-2.56a12.025 12.025 0 0 1-4.131 4.131m0 0a6 6 0 0 1-7.38-5.84m2.56-5.84a12.025 12.025 0 0 1 4.131-4.131m0 0a6 6 0 0 1 7.38 5.84m-2.56 5.84a12.025 12.025 0 0 1-4.131-4.131m0 0a6 6 0 0 1-5.84-7.38m5.84 2.56a12.025 12.025 0 0 1 4.131 4.131" />
+    </svg>
+);
+
+export const ScaleIcon = ({className="h-8 w-8"}) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v17.25m0 0c-1.472 0-2.882.265-4.185.75M12 20.25c1.472 0 2.882.265 4.185.75M18.75 4.97A48.416 48.416 0 0 0 12 4.5c-2.291 0-4.545.16-6.75.47m13.5 0c1.01.143 2.01.317 3 .52m-3-.52v16.5m-13.5-16.5v16.5m13.5-16.5c-1.01.143-2.01.317-3 .52m-10.5-1.04A48.416 48.416 0 0 1 12 4.5c2.291 0 4.545.16 6.75.47m-13.5 0a48.416 48.416 0 0 0-3 .52m16.5 0a48.416 48.416 0 0 1 3 .52M3.75 12h16.5M3.75 12a48.416 48.416 0 0 1-3-.52m19.5 0a48.416 48.416 0 0 0-3-.52M3.75 12a48.416 48.416 0 0 0-3 .52m19.5 0a48.416 48.416 0 0 1-3 .52" />
+    </svg>
+);
+
+export const BuildingStorefrontIcon = ({className="h-5 w-5"}) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 21v-7.5A.75.75 0 0 1 14.25 12h.01a.75.75 0 0 1 .75.75v7.5m0 0H15A2.25 2.25 0 0 0 12.75 18v-3.75a.75.75 0 0 0-.75-.75h-.01a.75.75 0 0 0-.75.75V18A2.25 2.25 0 0 0 9 21h1.5m2.25 0H12m0 0H9.75M12 21v-3.75a.75.75 0 0 1 .75-.75h.01a.75.75 0 0 1 .75.75V21m-3 0v-3.75a.75.75 0 0 0-.75-.75h-.01a.75.75 0 0 0-.75.75V21" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25V18a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 18V8.25a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 8.25ZM12 18.75h.008v.008H12v-.008Z" />
+    </svg>
+);

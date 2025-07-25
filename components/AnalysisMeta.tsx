@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { WorkspaceState } from '../types';
-import { LinkIcon, NetworkIcon, LightbulbIcon } from './icons';
+import { LinkIcon, NetworkIcon, LightbulbIcon, UsersIcon, RocketLaunchIcon, ScaleIcon } from './icons';
 
 interface AnalysisMetaProps {
     workspace: WorkspaceState;
@@ -19,6 +19,27 @@ const StatCard: React.FC<{ icon: React.ReactNode; value: number; label: string; 
 
 
 const AnalysisMeta: React.FC<AnalysisMetaProps> = ({ workspace }) => {
+    
+    if (workspace.marketInnovationAnalysis) {
+        const audienceCount = workspace.marketInnovationAnalysis.targetAudienceSegments.length;
+        const conceptCount = workspace.marketInnovationAnalysis.productConcepts.length;
+        const hurdleCount = workspace.marketInnovationAnalysis.regulatoryHurdles.length;
+
+        return (
+            <div className="bg-slate-900/50 backdrop-blur-sm rounded-xl border border-slate-700 p-5 mb-8">
+                <h2 className="text-lg font-bold text-slate-200 mb-1">AI Innovation &amp; Market Analysis</h2>
+                <p className="text-sm text-slate-400 mb-4">
+                    The AI agent analyzed the research landscape to identify target markets, product concepts, and commercialization hurdles.
+                </p>
+                <div className="flex flex-wrap gap-4 justify-center">
+                    <StatCard icon={<UsersIcon className="h-8 w-8" />} value={audienceCount} label="Target Segments" />
+                    <StatCard icon={<RocketLaunchIcon className="h-8 w-8" />} value={conceptCount} label="Product Concepts" />
+                    <StatCard icon={<ScaleIcon className="h-8 w-8" />} value={hurdleCount} label="Regulatory Hurdles" />
+                </div>
+            </div>
+        );
+    }
+
     const sourceCount = workspace.sources.length;
     const conceptCount = workspace.knowledgeGraph?.nodes.length ?? 0;
     const opportunityCount = workspace.researchOpportunities.length;

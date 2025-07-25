@@ -191,8 +191,10 @@ const App: React.FC = () => {
     };
     
     const handleDispatchWrapper = (lens: AnalysisLens, agentType: AgentType, tolerance: ContradictionTolerance) => {
-        handleDispatchAgent(lens, agentType, tolerance, setActiveTab, setChatHistory, setSelectedNode);
+        handleDispatchAgent(lens, agentType, tolerance, setActiveTab, chatHistory, setChatHistory, setSelectedNode);
     }
+
+    const isAnalysisComplete = !!workspace?.knowledgeGraph;
 
     return (
         <main className="min-h-screen text-slate-200">
@@ -219,6 +221,7 @@ const App: React.FC = () => {
                     onOpenAIModelNameChange={setOpenAIModelName}
                     openAIApiKey={openAIApiKey}
                     onOpenAIApiKeyChange={setOpenAIApiKey}
+                    isAnalysisComplete={isAnalysisComplete}
                 />
                 <Dashboard
                     activeTab={activeTab}

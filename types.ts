@@ -16,6 +16,7 @@ export enum AgentType {
     KnowledgeNavigator = "KnowledgeNavigator",
     TrendAnalyzer = "TrendAnalyzer",
     SourceFinder = "SourceFinder",
+    InnovationAgent = "InnovationAgent",
 }
 
 export type ContradictionTolerance = 'Low' | 'Medium' | 'High';
@@ -66,6 +67,27 @@ export interface ResearchOpportunity {
     potentialImpact: string;
 }
 
+export interface TargetAudienceSegment {
+    segmentName: string;
+    description: string;
+    marketSize: string; // e.g., "Niche", "Growing", "Large"
+}
+
+export interface ProductConcept {
+    conceptName: string;
+    description: string;
+    type: 'Diagnostic' | 'Therapeutic' | 'Platform' | 'Consumer';
+    readinessLevel: 'Concept' | 'Prototype' | 'MVP' | 'Market-Ready';
+}
+
+export interface MarketInnovationAnalysis {
+    summary: string;
+    targetAudienceSegments: TargetAudienceSegment[];
+    productConcepts: ProductConcept[];
+    regulatoryHurdles: string[];
+    keyCompetitors: string[];
+}
+
 export interface Contradiction {
     id: string;
     statement: string;
@@ -106,6 +128,7 @@ export interface WorkspaceState {
   synergies: Synergy[];
   keyQuestion: string | null;
   trendAnalysis: TrendAnalysis | null;
+  marketInnovationAnalysis: MarketInnovationAnalysis | null;
   timestamp: number;
 }
 
@@ -117,6 +140,7 @@ export interface AgentResponse {
   synergies?: Synergy[];
   keyQuestion?: string;
   trendAnalysis?: TrendAnalysis;
+  marketInnovationAnalysis?: MarketInnovationAnalysis;
 }
 
 export interface ChatMessage {

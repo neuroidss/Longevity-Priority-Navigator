@@ -1,8 +1,8 @@
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { type WorkspaceState, type KnowledgeGraphNode, type ResearchOpportunity, type AnalysisLens, type TrendAnalysis, Contradiction, Synergy, GroundingSource, SourceStatus, SearchDataSource } from '../types';
+import { type WorkspaceState, type KnowledgeGraphNode, type ResearchOpportunity, type AnalysisLens, type TrendAnalysis, Contradiction, Synergy, GroundingSource, SourceStatus, SearchDataSource, MarketInnovationAnalysis } from '../types';
 import LoadingSpinner from './LoadingSpinner';
-import { LinkIcon, NetworkIcon, LightbulbIcon, HypothesisIcon, BrainIcon, ClockIcon, ArrowTrendingUpIcon, ArrowTrendingDownIcon, BeakerIcon, ArrowsRightLeftIcon, BuildingLibraryIcon, ShieldCheckIcon, MethodIcon, SynergyIcon, ConflictIcon, CheckCircleIcon, XCircleIcon, QuestionMarkCircleIcon, ExclamationTriangleIcon, GoogleIcon, ArticleIcon, PatentIcon, GeneIcon } from './icons';
+import { LinkIcon, NetworkIcon, LightbulbIcon, HypothesisIcon, BrainIcon, ClockIcon, ArrowTrendingUpIcon, ArrowTrendingDownIcon, BeakerIcon, ArrowsRightLeftIcon, BuildingLibraryIcon, ShieldCheckIcon, MethodIcon, SynergyIcon, ConflictIcon, CheckCircleIcon, XCircleIcon, QuestionMarkCircleIcon, ExclamationTriangleIcon, GoogleIcon, ArticleIcon, PatentIcon, GeneIcon, UsersIcon, RocketLaunchIcon, ScaleIcon, BuildingStorefrontIcon } from './icons';
 import KnowledgeGraphView from './KnowledgeGraphView';
 import AnalysisMeta from './AnalysisMeta';
 import { LENS_DEFINITIONS, DATA_SOURCE_DEFINITIONS } from '../constants';
@@ -109,6 +109,99 @@ export const TextWithCitations: React.FC<{ text: string; sources: GroundingSourc
     };
     
     return <Component className={className}>{renderText()}</Component>;
+};
+
+
+const MarketInnovationAnalysisCard: React.FC<{ analysis: MarketInnovationAnalysis, sources: GroundingSource[] }> = ({ analysis, sources }) => {
+    const readinessStyles: Record<string, string> = {
+        'Concept': 'bg-red-900/50 text-red-300 border-red-700/50',
+        'Prototype': 'bg-yellow-900/50 text-yellow-300 border-yellow-700/50',
+        'MVP': 'bg-blue-900/50 text-blue-300 border-blue-700/50',
+        'Market-Ready': 'bg-green-900/50 text-green-300 border-green-700/50',
+    };
+
+    return (
+        <div className="bg-gradient-to-br from-slate-900 to-slate-800 border border-slate-700 rounded-2xl p-6 shadow-2xl shadow-slate-800/20 space-y-8">
+            {/* Header */}
+            <div className="flex flex-col items-center text-center">
+                <div className="p-3 mb-4 bg-gradient-to-br from-amber-500 to-orange-500 rounded-full">
+                    <LightbulbIcon className="h-10 w-10 text-white" />
+                </div>
+                <h2 className="text-sm font-bold uppercase tracking-widest text-amber-400 mb-2">Market & Innovation Analysis</h2>
+                <TextWithCitations text={analysis.summary} sources={sources} className="text-xl font-medium text-slate-200 max-w-3xl" />
+            </div>
+
+            {/* Target Audience & Product Concepts Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 pt-8 border-t border-slate-700/50">
+                {/* Target Audience Segments */}
+                <div className="space-y-4">
+                    <div className="flex items-center gap-3">
+                        <UsersIcon className="h-7 w-7 text-sky-400" />
+                        <h3 className="text-xl font-bold text-slate-100">Target Audience Segments</h3>
+                    </div>
+                    <div className="space-y-4">
+                        {analysis.targetAudienceSegments.map((segment, index) => (
+                            <div key={index} className="bg-slate-800/50 p-4 rounded-lg border border-slate-700">
+                                <div className="flex justify-between items-start">
+                                    <h4 className="font-bold text-sky-300">{segment.segmentName}</h4>
+                                    <span className="text-xs font-semibold px-2 py-1 bg-sky-900/50 text-sky-300 rounded-full border border-sky-700/50">{segment.marketSize}</span>
+                                </div>
+                                <TextWithCitations text={segment.description} sources={sources} className="text-sm text-slate-400 mt-1" />
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                {/* Product Concepts */}
+                <div className="space-y-4">
+                    <div className="flex items-center gap-3">
+                        <RocketLaunchIcon className="h-7 w-7 text-fuchsia-400" />
+                        <h3 className="text-xl font-bold text-slate-100">Product & Service Concepts</h3>
+                    </div>
+                     <div className="space-y-4">
+                        {analysis.productConcepts.map((concept, index) => (
+                            <div key={index} className="bg-slate-800/50 p-4 rounded-lg border border-slate-700">
+                                <div className="flex justify-between items-start gap-2">
+                                    <h4 className="font-bold text-fuchsia-300">{concept.conceptName}</h4>
+                                    <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                                        <span className="text-xs font-semibold px-2 py-1 bg-slate-700 text-slate-300 rounded-full border border-slate-600">{concept.type}</span>
+                                        <span className={`text-xs font-semibold px-2 py-1 rounded-full border ${readinessStyles[concept.readinessLevel] || 'bg-gray-700'}`}>{concept.readinessLevel}</span>
+                                    </div>
+                                </div>
+                                <TextWithCitations text={concept.description} sources={sources} className="text-sm text-slate-400 mt-1" />
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </div>
+
+            {/* Hurdles & Competitors */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 pt-8 border-t border-slate-700/50">
+                <div className="space-y-3">
+                    <div className="flex items-center gap-3">
+                        <ScaleIcon className="h-6 w-6 text-red-400" />
+                        <h3 className="text-lg font-bold text-slate-200">Regulatory & Commercial Hurdles</h3>
+                    </div>
+                    <ul className="list-disc list-inside space-y-2 text-sm text-slate-400 pl-2">
+                        {analysis.regulatoryHurdles.map((hurdle, index) => (
+                            <li key={index}><TextWithCitations text={hurdle} sources={sources} as="span" /></li>
+                        ))}
+                    </ul>
+                </div>
+                 <div className="space-y-3">
+                    <div className="flex items-center gap-3">
+                        <BuildingStorefrontIcon className="h-6 w-6 text-green-400" />
+                        <h3 className="text-lg font-bold text-slate-200">Key Competitors & Market Players</h3>
+                    </div>
+                    <ul className="list-disc list-inside space-y-2 text-sm text-slate-400 pl-2">
+                        {analysis.keyCompetitors.map((competitor, index) => (
+                            <li key={index}><TextWithCitations text={competitor} sources={sources} as="span" /></li>
+                        ))}
+                    </ul>
+                </div>
+            </div>
+        </div>
+    );
 };
 
 
@@ -554,7 +647,7 @@ const WorkspaceView: React.FC<WorkspaceViewProps> = ({ workspace, isLoading, err
         </div>
       )}
       
-      {hasSearched && !workspace?.knowledgeGraph && !isLoading && !error &&(
+      {hasSearched && !workspace?.knowledgeGraph && !workspace?.marketInnovationAnalysis && !isLoading && !error &&(
         <div className="text-center py-12">
             <h2 className="text-xl font-semibold text-slate-400">Analysis Incomplete</h2>
             <p className="text-slate-500 mt-2">The analysis could not be completed. Check the sources tab and logs for errors.</p>
@@ -566,7 +659,7 @@ const WorkspaceView: React.FC<WorkspaceViewProps> = ({ workspace, isLoading, err
             <AnalysisMeta workspace={workspace} />
 
             <div className="flex gap-2 sm:gap-4 border-b border-slate-700">
-                {!isTrendAnalysis && workspace.knowledgeGraph && (
+                {(!isTrendAnalysis || workspace.marketInnovationAnalysis) && workspace.knowledgeGraph && (
                     <TabButton
                         label="Priorities"
                         icon={<LightbulbIcon className="h-5 w-5" />}
@@ -592,38 +685,45 @@ const WorkspaceView: React.FC<WorkspaceViewProps> = ({ workspace, isLoading, err
             </div>
 
             <div className="py-4">
-                {activeTab === 'priorities' && !isTrendAnalysis && workspace.knowledgeGraph && (
-                    <div className="space-y-8">
-                      {workspace.keyQuestion && (
-                        <KeyQuestionCard question={workspace.keyQuestion} sources={workspace.sources} />
-                      )}
+                {activeTab === 'priorities' && (
+                  <div className="space-y-8">
+                    {workspace.marketInnovationAnalysis ? (
+                       <MarketInnovationAnalysisCard analysis={workspace.marketInnovationAnalysis} sources={workspace.sources} />
+                    ) : (
+                      <>
+                        {workspace.keyQuestion && (
+                          <KeyQuestionCard question={workspace.keyQuestion} sources={workspace.sources} />
+                        )}
 
-                      {(workspace.contradictions.length > 0 || workspace.synergies.length > 0) && (
-                        <CriticalAnalysisCard contradictions={workspace.contradictions} synergies={workspace.synergies} sources={workspace.sources} />
-                      )}
-                      
-                      {workspace.researchOpportunities.length > 0 ? (
-                        <div className="space-y-6">
-                            <div className="flex items-center gap-3">
-                                <LightbulbIcon className="h-7 w-7 text-yellow-300 flex-shrink-0" />
-                                <h2 className="text-2xl font-bold text-slate-100">AI-Proposed Research Directions</h2>
-                            </div>
-                            {Object.entries(researchOpportunitiesByLens).map(([lens, opportunities]) => (
-                                <div key={lens} className="space-y-4">
-                                    <h3 className="text-lg font-semibold text-purple-300 pl-1">
-                                        From the <span className="font-bold">{LENS_DEFINITIONS.find(l => l.id === lens)?.name || lens}</span> Perspective
-                                    </h3>
-                                    {opportunities.map(op => (
-                                        <ResearchOpportunityCard key={op.id} opportunity={op} onHighlight={setHighlightedNodeIds} sources={workspace.sources} />
-                                    ))}
-                                </div>
-                            ))}
-                        </div>
-                      ) : (
-                           !workspace.keyQuestion && <div className="text-center text-slate-500 py-12">The AI did not identify any priority research directions or a key question for this topic.</div>
-                      )}
-                    </div>
+                        {(workspace.contradictions.length > 0 || workspace.synergies.length > 0) && (
+                          <CriticalAnalysisCard contradictions={workspace.contradictions} synergies={workspace.synergies} sources={workspace.sources} />
+                        )}
+                        
+                        {workspace.researchOpportunities.length > 0 ? (
+                          <div className="space-y-6">
+                              <div className="flex items-center gap-3">
+                                  <LightbulbIcon className="h-7 w-7 text-yellow-300 flex-shrink-0" />
+                                  <h2 className="text-2xl font-bold text-slate-100">AI-Proposed Research Directions</h2>
+                              </div>
+                              {Object.entries(researchOpportunitiesByLens).map(([lens, opportunities]) => (
+                                  <div key={lens} className="space-y-4">
+                                      <h3 className="text-lg font-semibold text-purple-300 pl-1">
+                                          From the <span className="font-bold">{LENS_DEFINITIONS.find(l => l.id === lens)?.name || lens}</span> Perspective
+                                      </h3>
+                                      {opportunities.map(op => (
+                                          <ResearchOpportunityCard key={op.id} opportunity={op} onHighlight={setHighlightedNodeIds} sources={workspace.sources} />
+                                      ))}
+                                  </div>
+                              ))}
+                          </div>
+                        ) : (
+                             !workspace.keyQuestion && <div className="text-center text-slate-500 py-12">The AI did not identify any priority research directions or a key question for this topic.</div>
+                        )}
+                      </>
+                    )}
+                  </div>
                 )}
+
 
                 {activeTab === 'knowledge_web' && workspace.knowledgeGraph && (
                     <div className="space-y-8">
