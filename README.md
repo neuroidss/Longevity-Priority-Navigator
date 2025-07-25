@@ -65,7 +65,51 @@ The application is a modern, client-side web app built with React and TypeScript
 *   **State Management**: Application state is managed through a set of cohesive custom React hooks (`useWorkspaceManager`, `useAppSettings`, `useDebugLog`) and persisted in `localStorage` for seamless session continuity. This keeps component logic clean and state management predictable.
 *   **Visualization (`components/KnowledgeGraphView.tsx`)**: The knowledge graph is rendered using **SVG** and a custom, lightweight physics simulation engine. This provides a dynamic, interactive visualization without heavy library dependencies, offering full control over node behavior and styling.
 
-## Future Directions
+## Strategic Roadmap: From Research to Action
+
+This project has a clear path to evolve from a powerful research tool into a comprehensive platform for both scientific discovery and personal/investment action.
+
+### Phase 1: Immediate Application: Leverage the Existing "Innovation Agent"
+
+The `InnovationAgent` is specifically designed to bridge the gap between science and commerce.
+
+*   **Action:** Use the "Analyze Innovation" function on topics that have already shown promising human trial results (e.g., "SGLT2 inhibitors and aging," "GLP-1 agonists and all-cause mortality").
+*   **Expected Output:** The AI will generate a `MarketInnovationAnalysis`, providing:
+    *   Initial ideas for therapeutics or diagnostics.
+    *   A list of active companies and research groups (initial investment targets).
+    *   An understanding of the risks and timeline for potential products.
+*   **Benefit:** This provides an immediate, AI-vetted list of potential investment areas, directly answering the question of "where to spend the money."
+
+### Phase 2: Feature Extension: The "Applied Longevity" Agent
+
+The next step is to create a new, specialized agent focused explicitly on consumer-facing products and publicly traded companies.
+
+*   **Action:** Develop a new agent type, `AppliedLongevityAgent`, with a system prompt to identify:
+    1.  **Supplements & Nutraceuticals:** Compounds with evidence for impacting longevity pathways.
+    2.  **Publicly Traded Companies:** Companies (with ticker symbols) related to the research opportunities.
+    3.  **Investment Thesis:** A concise, AI-formulated investment thesis for promising areas.
+*   **Benefit:** This directly creates the "shopping list" of both supplements and stocks, making the insights tangible for a broader audience.
+
+### Phase 3: UI/UX Development: The Personalized "Longevity Portfolio"
+
+This phase translates the AI's output into a user-centric dashboard.
+
+*   **Action:** Design and build a new "Portfolio" tab in the UI.
+*   **Features:**
+    *   **Health & Wellness Wing:** A "Longevity Shopping Cart" listing supplements with evidence levels and links.
+    *   **Financial Wing:** An "Investment Portfolio" listing publicly traded companies with the AI's investment thesis.
+*   **Benefit:** This creates a powerful, dual-purpose interface for users to "invest" in their personal health and financial future, based on the same underlying scientific analysis.
+
+### Phase 4: Full Integration: Connecting to Live Data Streams
+
+This final phase makes the dashboard dynamic and truly actionable.
+
+*   **Action:** Integrate with third-party APIs:
+    *   **Financial APIs (e.g., Finnhub, Alpha Vantage):** For real-time stock prices and data.
+    *   **E-commerce/Affiliate APIs:** To show pricing and availability for supplements.
+*   **Benefit:** This transforms the application from a static analysis tool into a live, personalized decision-support system for longevity.
+
+## Additional Future Directions
 
 *   **Agent Collaboration**: Introduce a "Critic" agent that reviews the output of the primary agent, challenging its assumptions and improving the robustness of the final recommendations.
 *   **Deeper Integration**: Directly integrate with APIs from PubMed, bioRxiv, and patent offices for more structured and reliable data sourcing.
