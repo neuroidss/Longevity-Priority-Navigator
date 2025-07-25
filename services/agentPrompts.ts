@@ -1,4 +1,5 @@
 
+
 import { AgentType, type WorkspaceState, type AnalysisLens, type GroundingSource, type SearchResult, ContradictionTolerance } from '../types';
 import { LENS_DEFINITIONS } from "../constants";
 
@@ -282,7 +283,8 @@ export const buildChatPrompt = (
 
 export const buildFilterBioRxivFeedPrompt = (
     query: string,
-    feedItems: SearchResult[]
+    feedItems: SearchResult[],
+    limit: number
 ): { systemInstruction: string; userPrompt: string } => {
 
     const feedContext = feedItems.map((item, i) =>
@@ -293,14 +295,15 @@ export const buildFilterBioRxivFeedPrompt = (
 
     const systemInstruction = `You are a highly skilled research assistant specializing in biomedical science. Your task is to act as a relevance filter. You will be given a user's research topic and a list of article titles and snippets from a live preprint feed.
 - You must carefully evaluate each article to determine if it is **directly relevant** to the user's query.
+- From the relevant articles, you must select the **top ${limit} most relevant ones**.
 - Your output MUST be a single, valid JSON object enclosed in a markdown code block (\`\`\`json ... \`\`\`).
 - The JSON object must contain a single key, "relevantArticleUrls", which is an array of strings.
-- Each string in the array must be the exact URL of a relevant article from the provided list.
+- Each string in the array must be the exact URL of one of the top ${limit} relevant articles from the provided list. The array should contain at most ${limit} items.
 - If no articles are relevant, return an empty array: { "relevantArticleUrls": [] }.
-- Do not include any articles that are only tangentially related. Focus on direct relevance.
+- Do not include any articles that are only tangentially related. Focus on direct relevance and rank them.
 - Do not add any explanation or text outside the JSON block.
 
-Example response:
+Example response (for a limit of 2):
 \`\`\`json
 {
   "relevantArticleUrls": [

@@ -115,7 +115,7 @@ export const useWorkspaceManager = ({ settings, apiClient, addLog, storageKey }:
             localStorage.removeItem(storageKey);
             loadInitialState();
         }
-    }, [addLog, storageKey, settings.model]);
+    }, [addLog, storageKey]);
 
     const handleDispatchAgent = useCallback(async (
         lens: AnalysisLens, 
@@ -133,8 +133,8 @@ export const useWorkspaceManager = ({ settings, apiClient, addLog, storageKey }:
             setError("Please enter your Google AI API Key in the settings to use this model.");
             return;
         }
-        if (settings.selectedDataSources.length === 0) {
-            setError("Please select at least one data source in the Advanced Settings.");
+        if (Object.values(settings.dataSourceLimits).every(limit => limit === 0)) {
+            setError("Please enable at least one data source by setting its result limit greater than 0 in the Advanced Settings.");
             return;
         }
 
@@ -156,7 +156,7 @@ export const useWorkspaceManager = ({ settings, apiClient, addLog, storageKey }:
                 topic, 
                 settings.model, 
                 setLoadingMessage,
-                settings.selectedDataSources
+                settings.dataSourceLimits
             );
             tempWorkspace.sources = validatedSources;
             setWorkspace({ ...tempWorkspace });
@@ -183,7 +183,7 @@ export const useWorkspaceManager = ({ settings, apiClient, addLog, storageKey }:
                 chatHistory: [],
                 model: settings.model,
                 contradictionTolerance: tolerance,
-                selectedDataSources: settings.selectedDataSources,
+                dataSourceLimits: settings.dataSourceLimits,
             };
 
             localStorage.setItem(storageKey, JSON.stringify(stateToSave));

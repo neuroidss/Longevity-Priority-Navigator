@@ -4,6 +4,17 @@ import { useState, useEffect } from 'react';
 import { type ModelDefinition, ContradictionTolerance, SearchDataSource, ModelProvider } from '../types';
 import { SUPPORTED_MODELS } from '../constants';
 
+const DEFAULT_DATA_SOURCE_LIMITS: Record<SearchDataSource, number> = {
+    [SearchDataSource.GoogleSearch]: 15,
+    [SearchDataSource.WebSearch]: 5,
+    [SearchDataSource.PubMed]: 10,
+    [SearchDataSource.BioRxivFeed]: 5, // Raw items to fetch before AI filtering
+    [SearchDataSource.BioRxivPmcArchive]: 5,
+    [SearchDataSource.GooglePatents]: 5,
+    [SearchDataSource.OpenGenes]: 5,
+};
+
+
 export const useAppSettings = (addLog: (msg: string) => void, storageKey: string) => {
   const [model, setModel] = useState<ModelDefinition>(SUPPORTED_MODELS[0]);
   const [apiKey, setApiKey] = useState<string>(''); // This is Google AI Key
@@ -13,7 +24,7 @@ export const useAppSettings = (addLog: (msg: string) => void, storageKey: string
   const [openAIApiKey, setOpenAIApiKey] = useState<string>(''); // Can be empty
 
   const [contradictionTolerance, setContradictionTolerance] = useState<ContradictionTolerance>('Medium');
-  const [selectedDataSources, setSelectedDataSources] = useState<SearchDataSource[]>([...Object.values(SearchDataSource)]);
+  const [dataSourceLimits, setDataSourceLimits] = useState<Record<SearchDataSource, number>>(DEFAULT_DATA_SOURCE_LIMITS);
 
   useEffect(() => {
     const savedKey = sessionStorage.getItem('google-api-key');
@@ -31,8 +42,16 @@ export const useAppSettings = (addLog: (msg: string) => void, storageKey: string
             if (['Low', 'Medium', 'High'].includes(savedState.contradictionTolerance)) {
                 setContradictionTolerance(savedState.contradictionTolerance);
             }
-            if (Array.isArray(savedState.selectedDataSources) && savedState.selectedDataSources.length > 0) {
-                setSelectedDataSources(savedState.selectedDataSources);
+            if (savedState.dataSourceLimits && typeof savedState.dataSourceLimits === 'object') {
+                setDataSourceLimits({ ...DEFAULT_DATA_SOURCE_LIMITS, ...savedState.dataSourceLimits });
+            } else if (Array.isArray(savedState.selectedDataSources) && savedState.selectedDataSources.length > 0) { // Legacy support
+                 const newLimits = { ...DEFAULT_DATA_SOURCE_LIMITS };
+                 Object.keys(newLimits).forEach(key => {
+                    if(!savedState.selectedDataSources.includes(key)){
+                         newLimits[key as SearchDataSource] = 0;
+                    }
+                 });
+                 setDataSourceLimits(newLimits);
             }
             if (savedState.openAIBaseUrl) setOpenAIBaseUrl(savedState.openAIBaseUrl);
             if (savedState.openAIModelName) setOpenAIModelName(savedState.openAIModelName);
@@ -67,9 +86,20 @@ export const useAppSettings = (addLog: (msg: string) => void, storageKey: string
       addLog(`Contradiction Tolerance set to: ${tolerance}`);
   }
   
-  const handleDataSourceChange = (sources: SearchDataSource[]) => {
-      setSelectedDataSources(sources);
-      addLog(`Data sources updated: ${sources.join(', ')}`);
+  const handleDataSourceLimitChange = (source: SearchDataSource, limit: number) => {
+      setDataSourceLimits(prev => {
+        const newLimits = { ...prev, [source]: Math.max(0, limit) };
+        // Persist change immediately to localStorage
+        try {
+            const currentState = JSON.parse(localStorage.getItem(storageKey) || '{}');
+            currentState.dataSourceLimits = newLimits;
+            localStorage.setItem(storageKey, JSON.stringify(currentState));
+        } catch (e) {
+            addLog("Could not save data source limits to local storage.")
+        }
+        return newLimits;
+      });
+      addLog(`Data source limit for ${source} updated to: ${limit}`);
   };
 
   return {
@@ -85,7 +115,7 @@ export const useAppSettings = (addLog: (msg: string) => void, storageKey: string
     setOpenAIApiKey: handleOpenAIApiKeyChange,
     contradictionTolerance,
     setContradictionTolerance: handleToleranceChange,
-    selectedDataSources,
-    setSelectedDataSources: handleDataSourceChange,
+    dataSourceLimits,
+    setDataSourceLimits: handleDataSourceLimitChange,
   };
 };

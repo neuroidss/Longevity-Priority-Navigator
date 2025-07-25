@@ -2,7 +2,7 @@
 
 import { SearchDataSource, type SearchResult, type GeneSearchedRecord, type OpenGeneSearchResponse } from '../types';
 import { GenerateContentResponse } from "@google/genai";
-import { pipeline, type Pipeline, type Tensor } from '@huggingface/transformers';
+import { pipeline, type FeatureExtractionPipeline, type Tensor } from '@huggingface/transformers';
 
 type ProxyUrlBuilder = (url: string) => string;
 
@@ -80,10 +80,10 @@ const fetchWithCorsFallback = async (url: string, addLog: (message: string) => v
 const stripTags = (html: string) => html.replace(/<[^>]*>?/gm, '').trim();
 
 class SentenceTransformer {
-    static instance: Pipeline | null = null;
-    static initializing: Promise<Pipeline> | null = null;
+    static instance: FeatureExtractionPipeline | null = null;
+    static initializing: Promise<FeatureExtractionPipeline> | null = null;
 
-    static async getInstance(addLog: (msg: string) => void): Promise<Pipeline> {
+    static async getInstance(addLog: (msg: string) => void): Promise<FeatureExtractionPipeline> {
         if (this.instance) {
             return this.instance;
         }
@@ -101,7 +101,7 @@ class SentenceTransformer {
                     addLog(`[Embeddings] Model loading: ${progress.status}`);
                 }
             }
-        });
+        }) as Promise<FeatureExtractionPipeline>;
 
         try {
             this.instance = await this.initializing;
@@ -187,7 +187,8 @@ const filterWithEmbeddings = async (
 export const performGoogleSearch = async (
     query: string,
     addLog: (msg: string) => void,
-    performAiCall: () => Promise<GenerateContentResponse>
+    performAiCall: () => Promise<GenerateContentResponse>,
+    limit: number
 ): Promise<SearchResult[]> => {
     addLog(`[performGoogleSearch] Starting AI-powered web search...`);
     try {
@@ -224,7 +225,7 @@ export const performGoogleSearch = async (
         addLog(`[performGoogleSearch] Found ${searchResults.length} raw sources from Google Search grounding.`);
         const uniqueResults = Array.from(new Map(searchResults.map(item => [item.link, item])).values());
 
-        const GOOGLE_SEARCH_LIMIT = 20;
+        const GOOGLE_SEARCH_LIMIT = limit;
         if (uniqueResults.length > GOOGLE_SEARCH_LIMIT) {
             addLog(`[performGoogleSearch] Limiting Google Search results from ${uniqueResults.length} to ${GOOGLE_SEARCH_LIMIT}.`);
             return uniqueResults.slice(0, GOOGLE_SEARCH_LIMIT);
@@ -242,7 +243,7 @@ export const performGoogleSearch = async (
 /**
  * Performs a web search using DuckDuckGo's non-JS site.
  */
-const searchWeb = async (query: string, addLog: (message: string) => void): Promise<SearchResult[]> => {
+const searchWeb = async (query: string, addLog: (message: string) => void, limit: number): Promise<SearchResult[]> => {
     const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
     const results: SearchResult[] = [];
     try {
@@ -278,15 +279,15 @@ const searchWeb = async (query: string, addLog: (message: string) => void): Prom
     } catch (error) {
         addLog(`[Search.Web] Error searching DuckDuckGo: ${error}`);
     }
-    return results.slice(0, 5); // Limit to top 5
+    return results.slice(0, limit);
 };
 
-const searchPubMed = async (query: string, addLog: (message: string) => void): Promise<SearchResult[]> => {
+const searchPubMed = async (query: string, addLog: (message: string) => void, limit: number): Promise<SearchResult[]> => {
     const results: SearchResult[] = [];
     try {
         const specificQuery = `${query}[Title/Abstract]`;
         addLog(`[Search.PubMed] Using specific query: "${specificQuery}"`);
-        const searchUrl = `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=${encodeURIComponent(specificQuery)}&retmode=json&sort=relevance&retmax=5`;
+        const searchUrl = `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=${encodeURIComponent(specificQuery)}&retmode=json&sort=relevance&retmax=${limit}`;
         
         const searchResponse = await fetch(searchUrl);
         if (!searchResponse.ok) throw new Error(`PubMed search failed with status ${searchResponse.status}`);
@@ -318,7 +319,7 @@ const searchPubMed = async (query: string, addLog: (message: string) => void): P
     return results;
 };
 
-const searchBioRxivPmcArchive = async (query: string, addLog: (message: string) => void): Promise<SearchResult[]> => {
+const searchBioRxivPmcArchive = async (query: string, addLog: (message: string) => void, limit: number): Promise<SearchResult[]> => {
     addLog(`[Search.BioRxivPmc] Searching via PubMed Central (PMC) API...`);
     const results: SearchResult[] = [];
     try {
@@ -329,7 +330,7 @@ const searchBioRxivPmcArchive = async (query: string, addLog: (message: string) 
         
         const enhancedQuery = `(("${query}") OR (${processedQuery})) AND biorxiv[journal]`;
         
-        const searchUrl = `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pmc&term=${encodeURIComponent(enhancedQuery)}&retmode=json&sort=relevance&retmax=5`;
+        const searchUrl = `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pmc&term=${encodeURIComponent(enhancedQuery)}&retmode=json&sort=relevance&retmax=${limit}`;
         
         addLog(`[Fetch] Querying PMC for bioRxiv preprints with query: ${enhancedQuery}`);
         const searchResponse = await fetch(searchUrl);
@@ -384,7 +385,7 @@ const monitorBioRxivFeed = async (query: string, addLog: (message: string) => vo
         const doc = parser.parseFromString(xmlText, "application/xml");
         const items = doc.querySelectorAll("item");
         
-        const MAX_FEED_ITEMS = 50;
+        const MAX_FEED_ITEMS = 100; // Fetch up to 100 items from the feed
         items.forEach((item, index) => {
             if (index >= MAX_FEED_ITEMS) return;
 
@@ -410,7 +411,7 @@ const monitorBioRxivFeed = async (query: string, addLog: (message: string) => vo
     }
 };
 
-const searchGooglePatents = async (query: string, addLog: (message: string) => void): Promise<SearchResult[]> => {
+const searchGooglePatents = async (query: string, addLog: (message: string) => void, limit: number): Promise<SearchResult[]> => {
     const url = `https://patents.google.com/xhr/query?url=q%3D${encodeURIComponent(query)}`;
     const results: SearchResult[] = [];
     try {
@@ -425,7 +426,7 @@ const searchGooglePatents = async (query: string, addLog: (message: string) => v
         const data = JSON.parse(jsonText);
         
         const patents = data.results?.cluster?.[0]?.result || [];
-        patents.slice(0, 5).forEach((item: any) => {
+        patents.slice(0, limit).forEach((item: any) => {
             if (item && item.patent) {
                 const patent = item.patent;
                 const inventors = (patent.inventor_normalized && Array.isArray(patent.inventor_normalized)) 
@@ -451,7 +452,7 @@ const searchGooglePatents = async (query: string, addLog: (message: string) => v
     return results;
 };
 
-const searchOpenGenesAPI = async (query: string, addLog: (message: string) => void): Promise<SearchResult[]> => {
+const searchOpenGenesAPI = async (query: string, addLog: (message: string) => void, limit: number): Promise<SearchResult[]> => {
     const mapGeneSearchedToSearchResult = (record: GeneSearchedRecord): SearchResult => {
         const firstLifespanResearch = record.researches?.increaseLifespan?.[0];
         let lifespanChange = 'N/A';
@@ -486,14 +487,14 @@ const searchOpenGenesAPI = async (query: string, addLog: (message: string) => vo
         };
     };
 
-    const apiUrl = `https://open-genes.com/api/gene/search?bySuggestions=${encodeURIComponent(query)}&pageSize=10`;
+    const apiUrl = `https://open-genes.com/api/gene/search?bySuggestions=${encodeURIComponent(query)}&pageSize=${limit}`;
     addLog(`[Search.OpenGenes] Querying live API at: ${apiUrl}`);
     try {
         const response = await fetchWithCorsFallback(apiUrl, addLog);
         const data: OpenGeneSearchResponse = await response.json();
         const results = data.items.map(mapGeneSearchedToSearchResult);
         addLog(`[Search.OpenGenes] Found ${results.length} matches from API.`);
-        return results.slice(0, 5);
+        return results.slice(0, limit);
     } catch (error) {
         addLog(`[Search.OpenGenes] Error querying OpenGenes API: ${error}`);
         return [];
@@ -502,22 +503,24 @@ const searchOpenGenesAPI = async (query: string, addLog: (message: string) => vo
 
 export const performFederatedSearch = async (
     query: string,
-    sources: SearchDataSource[],
+    dataSourceLimits: Partial<Record<SearchDataSource, number>>,
     addLog: (message: string) => void,
     useEmbeddingFilterForFeed?: boolean
 ): Promise<SearchResult[]> => {
     let allResults: SearchResult[] = [];
     
-    addLog(`[Search] Starting federated search for "${query}" across sources: ${sources.join(', ')}`);
+    const enabledSources = (Object.keys(dataSourceLimits) as SearchDataSource[]).filter(source => (dataSourceLimits[source] ?? 0) > 0);
+    addLog(`[Search] Starting federated search for "${query}" across sources: ${enabledSources.join(', ')}`);
 
-    const searchPromises = sources.map(source => {
+    const searchPromises = enabledSources.map(source => {
+        const limit = dataSourceLimits[source]!;
         switch(source) {
-            case SearchDataSource.PubMed: return searchPubMed(query, addLog);
+            case SearchDataSource.PubMed: return searchPubMed(query, addLog, limit);
             case SearchDataSource.BioRxivFeed: return monitorBioRxivFeed(query, addLog);
-            case SearchDataSource.BioRxivPmcArchive: return searchBioRxivPmcArchive(query, addLog);
-            case SearchDataSource.GooglePatents: return searchGooglePatents(query, addLog);
-            case SearchDataSource.WebSearch: return searchWeb(query, addLog);
-            case SearchDataSource.OpenGenes: return searchOpenGenesAPI(query, addLog);
+            case SearchDataSource.BioRxivPmcArchive: return searchBioRxivPmcArchive(query, addLog, limit);
+            case SearchDataSource.GooglePatents: return searchGooglePatents(query, addLog, limit);
+            case SearchDataSource.WebSearch: return searchWeb(query, addLog, limit);
+            case SearchDataSource.OpenGenes: return searchOpenGenesAPI(query, addLog, limit);
             default: return Promise.resolve([]);
         }
     });
@@ -525,7 +528,7 @@ export const performFederatedSearch = async (
     const resultsBySource = await Promise.allSettled(searchPromises);
 
     resultsBySource.forEach((result, index) => {
-        const sourceName = sources[index];
+        const sourceName = enabledSources[index];
         if (result.status === 'fulfilled' && result.value) {
             addLog(`[Search] ${sourceName} returned ${result.value.length} results.`);
             allResults.push(...result.value);

@@ -245,12 +245,12 @@ export class ApiClient {
         return response;
     }
 
-    private async filterBioRxivFeedWithAI(query: string, feedItems: SearchResult[], model: ModelDefinition): Promise<SearchResult[]> {
+    private async filterBioRxivFeedWithAI(query: string, feedItems: SearchResult[], model: ModelDefinition, limit: number): Promise<SearchResult[]> {
         if (feedItems.length === 0) return [];
         this.addLog(`[BioRxivFeedFilter] Asking AI to filter ${feedItems.length} raw feed items for relevance to "${query}"...`);
         
         try {
-            const { systemInstruction, userPrompt } = buildFilterBioRxivFeedPrompt(query, feedItems);
+            const { systemInstruction, userPrompt } = buildFilterBioRxivFeedPrompt(query, feedItems, limit);
             const response = await this.callGoogleAI(model.id, systemInstruction, userPrompt, false);
             const jsonText = parseJsonFromText(response.text, this.addLog);
             const data = JSON.parse(jsonText);
@@ -372,9 +372,9 @@ export class ApiClient {
         query: string,
         model: ModelDefinition,
         setLoadingMessage: (message: string) => void,
-        enabledSources: SearchDataSource[]
+        dataSourceLimits: Record<SearchDataSource, number>
     ): Promise<GroundingSource[]> {
-        this.addLog(`[discoverAndValidateSources] Starting with enabled sources: ${enabledSources.join(', ')}`);
+        this.addLog(`[discoverAndValidateSources] Starting with data source limits: ${JSON.stringify(dataSourceLimits)}`);
 
         if (model.provider === ModelProvider.Ollama || model.provider === ModelProvider.OpenAI_API) {
             setLoadingMessage("Step 1/3: Searching for context...");
@@ -382,7 +382,7 @@ export class ApiClient {
             this.addLog(`[discoverAndValidateSources] ${providerName} model detected. Using federated search.`);
             
             // Step 1: Federated Search
-            const searchResults = await performFederatedSearch(query, enabledSources, this.addLog, true);
+            const searchResults = await performFederatedSearch(query, dataSourceLimits, this.addLog, true);
             const uniqueSearchResults = Array.from(new Map(searchResults.map(item => [item.link, item])).values());
             
             if (uniqueSearchResults.length === 0) {
@@ -460,20 +460,28 @@ export class ApiClient {
         // --- Google AI Path ---
         setLoadingMessage("Step 1/3: Searching databases & web...");
         
-        const specialistSearchSources = enabledSources.filter(s => s !== SearchDataSource.GoogleSearch);
-        const useGoogleSearch = enabledSources.includes(SearchDataSource.GoogleSearch);
+        const googleSearchLimit = dataSourceLimits[SearchDataSource.GoogleSearch] || 0;
+        const useGoogleSearch = googleSearchLimit > 0;
+
+        const specialistSearchLimits: Partial<Record<SearchDataSource, number>> = {};
+        for (const key in dataSourceLimits) {
+            const source = key as SearchDataSource;
+            if (source !== SearchDataSource.GoogleSearch && dataSourceLimits[source] > 0) {
+                specialistSearchLimits[source] = dataSourceLimits[source];
+            }
+        }
         
         this.addLog(`[discoverAndValidateSources] Starting concurrent searches...`);
         const searchPromises = [];
-        if (specialistSearchSources.length > 0) {
-            searchPromises.push(performFederatedSearch(query, specialistSearchSources, this.addLog, false));
+        if (Object.keys(specialistSearchLimits).length > 0) {
+            searchPromises.push(performFederatedSearch(query, specialistSearchLimits, this.addLog, false));
         }
         if (useGoogleSearch) {
             searchPromises.push(performGoogleSearch(query, this.addLog, async () => {
                 const systemInstruction = "You are a helpful research assistant.";
                 const userPrompt = `Find the most relevant and reliable scientific sources about "${query}"`;
                 return this.callGoogleAI(model.id, systemInstruction, userPrompt, true);
-            }));
+            }, googleSearchLimit));
         }
 
         const results = await Promise.allSettled(searchPromises);
@@ -490,7 +498,9 @@ export class ApiClient {
         // AI-powered filtering for the BioRxiv Feed
         const rawFeedResults = allSearchResults.filter(r => r.source === SearchDataSource.BioRxivFeed);
         if (rawFeedResults.length > 0) {
-            const filteredFeedResults = await this.filterBioRxivFeedWithAI(query, rawFeedResults, model);
+            const bioRxivLimit = dataSourceLimits[SearchDataSource.BioRxivFeed] || 5;
+            this.addLog(`[BioRxivFeedFilter] AI will select the top ${bioRxivLimit} most relevant items from the full feed.`);
+            const filteredFeedResults = await this.filterBioRxivFeedWithAI(query, rawFeedResults, model, bioRxivLimit);
             // Replace raw feed results with AI-filtered results
             allSearchResults = allSearchResults.filter(r => r.source !== SearchDataSource.BioRxivFeed);
             allSearchResults.push(...filteredFeedResults);

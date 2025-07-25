@@ -1,6 +1,5 @@
 
 
-
 import React, { useState } from 'react';
 import { AgentType, type ModelDefinition, type AnalysisLens, ContradictionTolerance, SearchDataSource, ModelProvider } from '../types';
 import { EXAMPLE_TOPICS, SUPPORTED_MODELS, LENS_DEFINITIONS, DATA_SOURCE_DEFINITIONS } from '../constants';
@@ -17,8 +16,8 @@ interface AgentControlPanelProps {
   onApiKeyChange: (key: string) => void;
   contradictionTolerance: ContradictionTolerance;
   setContradictionTolerance: (tolerance: ContradictionTolerance) => void;
-  selectedDataSources: SearchDataSource[];
-  onDataSourceChange: (sources: SearchDataSource[]) => void;
+  dataSourceLimits: Record<SearchDataSource, number>;
+  onDataSourceLimitChange: (source: SearchDataSource, limit: number) => void;
   apiCallLimit: number;
   onApiCallLimitChange: (limit: number) => void;
   openAIBaseUrl: string;
@@ -32,7 +31,7 @@ interface AgentControlPanelProps {
 const AgentControlPanel: React.FC<AgentControlPanelProps> = ({ 
   topic, setTopic, onDispatchAgent, isLoading, model, setModel, 
   apiKey, onApiKeyChange, contradictionTolerance, setContradictionTolerance,
-  selectedDataSources, onDataSourceChange, apiCallLimit, onApiCallLimitChange,
+  dataSourceLimits, onDataSourceLimitChange, apiCallLimit, onApiCallLimitChange,
   openAIBaseUrl, onOpenAIBaseUrlChange, openAIModelName, onOpenAIModelNameChange,
   openAIApiKey, onOpenAIApiKeyChange
 }) => {
@@ -265,29 +264,29 @@ const AgentControlPanel: React.FC<AgentControlPanelProps> = ({
                 </div>
             )}
           </div>
-           <div className="space-y-3">
-                <label className="block text-sm font-medium text-slate-300">Data Sources</label>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <div className="space-y-3">
+                <label className="block text-sm font-medium text-slate-300">Data Sources (Max Results)</label>
+                <p className="text-xs text-slate-400 -mt-2">Set to 0 to disable a source. Different models handle different context sizes, so adjust accordingly.</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                     {Object.entries(DATA_SOURCE_DEFINITIONS).map(([sourceKey, sourceInfo]) => {
-                        const isChecked = selectedDataSources.includes(sourceKey as SearchDataSource);
+                        const source = sourceKey as SearchDataSource;
+                        const limit = dataSourceLimits[source] ?? 0;
                         return (
-                            <label key={sourceKey} title={sourceInfo.description} className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-all duration-200 border-2 ${isChecked ? 'bg-slate-700 border-purple-500' : 'bg-slate-800 border-slate-700 hover:border-slate-600'}`}>
-                                <input
-                                    type="checkbox"
-                                    checked={isChecked}
-                                    onChange={() => {
-                                        const newSources = isChecked
-                                            ? selectedDataSources.filter(s => s !== sourceKey)
-                                            : [...selectedDataSources, sourceKey as SearchDataSource];
-                                        onDataSourceChange(newSources);
-                                    }}
-                                    disabled={isLoading}
-                                    className="h-4 w-4 rounded bg-slate-900 border-slate-500 text-purple-600 focus:ring-2 focus:ring-offset-0 focus:ring-offset-transparent focus:ring-purple-500"
-                                />
-                                <div className="flex items-center gap-2 text-sm font-semibold text-slate-200">
-                                   {React.cloneElement(sourceInfo.icon, {className: 'h-5 w-5'})}
-                                   <span>{sourceInfo.label}</span>
+                            <label key={sourceKey} title={sourceInfo.description} className="flex items-center gap-3 p-2 pr-3 rounded-lg bg-slate-800 border border-slate-700 hover:border-slate-600 transition-colors">
+                                <div className="flex items-center gap-2 text-sm font-semibold text-slate-200 flex-grow">
+                                   {React.cloneElement(sourceInfo.icon, {className: 'h-5 w-5 flex-shrink-0'})}
+                                   <span className="flex-grow">{sourceInfo.label}</span>
                                 </div>
+                                <input
+                                    type="number"
+                                    value={limit}
+                                    onChange={(e) => onDataSourceLimitChange(source, parseInt(e.target.value, 10) || 0)}
+                                    min="0"
+                                    max="50"
+                                    disabled={isLoading}
+                                    className="w-16 text-center bg-slate-700 border-slate-600 text-slate-200 font-semibold rounded-md p-1 focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                                    aria-label={`Max results for ${sourceInfo.label}`}
+                                />
                             </label>
                         );
                     })}

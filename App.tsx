@@ -1,8 +1,7 @@
 
 
-
 import React, { useState, useEffect, useMemo } from 'react';
-import { AgentType, type AnalysisLens, type ChatMessage, type KnowledgeGraphNode, type GroundingSource, type WorkspaceState, SourceStatus, ContradictionTolerance, ModelProvider } from './types';
+import { AgentType, type AnalysisLens, type ChatMessage, type KnowledgeGraphNode, type GroundingSource, type WorkspaceState, SourceStatus, ContradictionTolerance, ModelProvider, SearchDataSource } from './types';
 import { ApiClient } from './services/geminiService';
 import { useAppSettings } from './hooks/useAppSettings';
 import { useWorkspaceManager } from './hooks/useWorkspaceManager';
@@ -93,7 +92,7 @@ const App: React.FC = () => {
     const settings = useAppSettings(addLog, APP_STATE_STORAGE_KEY);
     const { 
       model, setModel, apiKey, setApiKey, contradictionTolerance, 
-      setContradictionTolerance, selectedDataSources, setSelectedDataSources,
+      setContradictionTolerance, dataSourceLimits, setDataSourceLimits,
       openAIBaseUrl, setOpenAIBaseUrl, openAIModelName, setOpenAIModelName,
       openAIApiKey, setOpenAIApiKey
     } = settings;
@@ -145,7 +144,7 @@ const App: React.FC = () => {
             workspace: ws,
             chatHistory: ch,
             contradictionTolerance: ct,
-            selectedDataSources,
+            dataSourceLimits,
         };
         localStorage.setItem(APP_STATE_STORAGE_KEY, JSON.stringify(stateToSave));
     };
@@ -210,8 +209,8 @@ const App: React.FC = () => {
                     onApiKeyChange={setApiKey}
                     contradictionTolerance={contradictionTolerance}
                     setContradictionTolerance={setContradictionTolerance}
-                    selectedDataSources={selectedDataSources}
-                    onDataSourceChange={setSelectedDataSources}
+                    dataSourceLimits={dataSourceLimits}
+                    onDataSourceLimitChange={setDataSourceLimits}
                     apiCallLimit={usageState.limit}
                     onApiCallLimitChange={setApiCallLimit}
                     openAIBaseUrl={openAIBaseUrl}
