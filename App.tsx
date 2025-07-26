@@ -16,9 +16,11 @@ import Footer from './components/Footer';
 
 const APP_STATE_STORAGE_KEY = 'longevityKnowledgeGraphState';
 
+type ActiveTab = 'priorities' | 'knowledge_web' | 'action_plan' | 'sources';
+
 interface DashboardProps {
-    activeTab: 'priorities' | 'knowledge_web' | 'sources';
-    setActiveTab: React.Dispatch<React.SetStateAction<'priorities' | 'knowledge_web' | 'sources'>>;
+    activeTab: ActiveTab;
+    setActiveTab: React.Dispatch<React.SetStateAction<ActiveTab>>;
     workspace: WorkspaceState | null;
     isLoading: boolean;
     error: string | null;
@@ -50,12 +52,15 @@ const Dashboard: React.FC<DashboardProps> = ({
     onManualSourceUpdate,
 }) => {
     const isGraphFocused = activeTab === 'knowledge_web';
-    const isWorkspaceReady = !!workspace && !!workspace.knowledgeGraph;
+    const isActionPlanFocused = activeTab === 'action_plan';
+    const isWorkspaceReady = !!workspace && (!!workspace.knowledgeGraph || !!workspace.appliedLongevityAnalysis);
     const sources = workspace?.sources || [];
+    
+    const mainContentSpan = isGraphFocused ? 'lg:col-span-2' : 'lg:col-span-1';
 
     return (
-        <div className={`grid grid-cols-1 ${isGraphFocused ? 'lg:grid-cols-3' : 'lg:grid-cols-2'} gap-8 mt-8 items-start`}>
-            <div className={`${isGraphFocused ? 'lg:col-span-2' : 'lg:col-span-1'} flex flex-col gap-8`}>
+        <div className={`grid grid-cols-1 ${isActionPlanFocused ? 'lg:grid-cols-1' : 'lg:grid-cols-3'} gap-8 mt-8 items-start`}>
+            <div className={`${isActionPlanFocused ? 'lg:col-span-1' : 'lg:col-span-2'} flex flex-col gap-8`}>
                 <WorkspaceView
                     workspace={workspace}
                     isLoading={isLoading}
@@ -69,17 +74,19 @@ const Dashboard: React.FC<DashboardProps> = ({
                     onManualSourceUpdate={onManualSourceUpdate}
                 />
             </div>
-            <div className="lg:col-span-1 lg:sticky lg:top-8">
-                 <ChatView
-                    chatHistory={chatHistory}
-                    isChatting={isChatting}
-                    onSendMessage={onSendMessage}
-                    isWorkspaceReady={isWorkspaceReady}
-                    selectedNode={selectedNode}
-                    onClearSelectedNode={onClearSelectedNode}
-                    sources={sources}
-                />
-            </div>
+             {!isActionPlanFocused && (
+                <div className="lg:col-span-1 lg:sticky lg:top-8">
+                     <ChatView
+                        chatHistory={chatHistory}
+                        isChatting={isChatting}
+                        onSendMessage={onSendMessage}
+                        isWorkspaceReady={isWorkspaceReady}
+                        selectedNode={selectedNode}
+                        onClearSelectedNode={onClearSelectedNode}
+                        sources={sources}
+                    />
+                </div>
+            )}
         </div>
     );
 };
@@ -114,7 +121,7 @@ const App: React.FC = () => {
     const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
     const [isChatting, setIsChatting] = useState(false);
     const [selectedNode, setSelectedNode] = useState<KnowledgeGraphNode | null>(null);
-    const [activeTab, setActiveTab] = useState<'priorities' | 'knowledge_web' | 'sources'>('priorities');
+    const [activeTab, setActiveTab] = useState<ActiveTab>('priorities');
     
     // --- Effects ---
     useEffect(() => {

@@ -1,8 +1,8 @@
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { type WorkspaceState, type KnowledgeGraphNode, type ResearchOpportunity, type AnalysisLens, type TrendAnalysis, Contradiction, Synergy, GroundingSource, SourceStatus, SearchDataSource, MarketInnovationAnalysis } from '../types';
+import { type WorkspaceState, type KnowledgeGraphNode, type ResearchOpportunity, type AnalysisLens, type TrendAnalysis, Contradiction, Synergy, GroundingSource, SourceStatus, SearchDataSource, MarketInnovationAnalysis, AppliedLongevityAnalysis, EvidenceLevel, ConsumerProduct, InvestableEntity } from '../types';
 import LoadingSpinner from './LoadingSpinner';
-import { LinkIcon, NetworkIcon, LightbulbIcon, HypothesisIcon, BrainIcon, ClockIcon, ArrowTrendingUpIcon, ArrowTrendingDownIcon, BeakerIcon, ArrowsRightLeftIcon, BuildingLibraryIcon, ShieldCheckIcon, MethodIcon, SynergyIcon, ConflictIcon, CheckCircleIcon, XCircleIcon, QuestionMarkCircleIcon, ExclamationTriangleIcon, GoogleIcon, ArticleIcon, PatentIcon, GeneIcon, UsersIcon, RocketLaunchIcon, ScaleIcon, BuildingStorefrontIcon } from './icons';
+import { LinkIcon, NetworkIcon, LightbulbIcon, HypothesisIcon, BrainIcon, ClockIcon, ArrowTrendingUpIcon, ArrowTrendingDownIcon, BeakerIcon, ArrowsRightLeftIcon, BuildingLibraryIcon, ShieldCheckIcon, MethodIcon, SynergyIcon, ConflictIcon, CheckCircleIcon, XCircleIcon, QuestionMarkCircleIcon, ExclamationTriangleIcon, GoogleIcon, ArticleIcon, PatentIcon, GeneIcon, UsersIcon, RocketLaunchIcon, ScaleIcon, BuildingStorefrontIcon, ShoppingCartIcon, ChartBarIcon } from './icons';
 import KnowledgeGraphView from './KnowledgeGraphView';
 import AnalysisMeta from './AnalysisMeta';
 import { LENS_DEFINITIONS, DATA_SOURCE_DEFINITIONS } from '../constants';
@@ -301,6 +301,99 @@ const TrendAnalysisCard: React.FC<{ analysis: TrendAnalysis, sources: GroundingS
     );
 };
 
+const EvidenceLevelTag: React.FC<{ level: EvidenceLevel }> = ({ level }) => {
+    const styles: Record<EvidenceLevel, { icon: JSX.Element, text: string, color: string, bg: string }> = {
+        'Human Clinical Trials': { icon: <UsersIcon className="h-4 w-4" />, text: 'Human Trials', color: 'text-green-300', bg: 'bg-green-900/50' },
+        'Animal Models': { icon: <BeakerIcon className="h-4 w-4" />, text: 'Animal Models', color: 'text-blue-300', bg: 'bg-blue-900/50' },
+        'In Vitro / In Silico': { icon: <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v4.512a2 2 0 01-1 1.732l-2 1.155a2 2 0 01-2 0l-2-1.155a2 2 0 01-1-1.732V5L8 4z" /></svg>, text: 'In-Vitro/Silico', color: 'text-yellow-300', bg: 'bg-yellow-900/50' },
+        'Correlational / Observational': { icon: <LinkIcon className="h-4 w-4" />, text: 'Observational', color: 'text-slate-400', bg: 'bg-slate-700/80' },
+    };
+
+    const style = styles[level] || styles['Correlational / Observational'];
+    return (
+        <div className={`inline-flex items-center gap-2 px-2.5 py-1 rounded-full text-xs font-semibold ${style.bg} ${style.color}`}>
+            {style.icon}
+            <span>{style.text}</span>
+        </div>
+    );
+};
+
+
+const AppliedLongevityCard: React.FC<{ analysis: AppliedLongevityAnalysis, sources: GroundingSource[] }> = ({ analysis, sources }) => {
+    return (
+        <div className="bg-gradient-to-br from-slate-900 to-slate-800 border border-slate-700 rounded-2xl p-6 shadow-2xl shadow-slate-800/20 space-y-8">
+            {/* Header */}
+            <div className="flex flex-col items-center text-center">
+                <div className="p-3 mb-4 bg-gradient-to-br from-green-500 to-emerald-500 rounded-full">
+                    <ShoppingCartIcon className="h-10 w-10 text-white" />
+                </div>
+                <h2 className="text-sm font-bold uppercase tracking-widest text-green-400 mb-2">Applied Longevity Action Plan</h2>
+                <TextWithCitations text={analysis.summary} sources={sources} className="text-xl font-medium text-slate-200 max-w-3xl" />
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 pt-8 border-t border-slate-700/50">
+                {/* Health & Wellness Blueprint */}
+                <div className="space-y-4">
+                    <div className="flex items-center gap-3">
+                        <BeakerIcon className="h-7 w-7 text-sky-400" />
+                        <h3 className="text-xl font-bold text-slate-100">Longevity Blueprint: Health & Wellness</h3>
+                    </div>
+                    <div className="space-y-4">
+                        {(analysis.consumerProducts || []).map((product, index) => (
+                            <div key={index} className="bg-slate-800/50 p-4 rounded-lg border border-slate-700 space-y-3">
+                                <div className="flex justify-between items-start gap-2">
+                                    <h4 className="font-bold text-lg text-sky-300">{product.name}</h4>
+                                    <EvidenceLevelTag level={product.evidenceLevel} />
+                                </div>
+                                <div>
+                                    <p className="text-xs font-bold text-slate-400 uppercase">Mechanism</p>
+                                    <TextWithCitations text={product.mechanism} sources={sources} className="text-sm text-slate-300"/>
+                                </div>
+                                <div>
+                                    <p className="text-xs font-bold text-slate-400 uppercase">Evidence</p>
+                                    <TextWithCitations text={product.evidenceSummary} sources={sources} className="text-sm text-slate-300"/>
+                                </div>
+                                <div>
+                                    <p className="text-xs font-bold text-slate-400 uppercase">Risks & Considerations</p>
+                                    <TextWithCitations text={product.risks} sources={sources} className="text-sm text-slate-300"/>
+                                </div>
+                            </div>
+                        ))}
+                         {(!analysis.consumerProducts || analysis.consumerProducts.length === 0) && (
+                            <p className="text-slate-500 text-sm p-4 text-center">No consumer-level products were identified from the provided research context.</p>
+                        )}
+                    </div>
+                </div>
+
+                 {/* Investment Blueprint */}
+                <div className="space-y-4">
+                    <div className="flex items-center gap-3">
+                        <ChartBarIcon className="h-7 w-7 text-emerald-400" />
+                        <h3 className="text-xl font-bold text-slate-100">Longevity Blueprint: Investments</h3>
+                    </div>
+                    <div className="space-y-4">
+                        {(analysis.investableEntities || []).map((entity, index) => (
+                            <div key={index} className="bg-slate-800/50 p-4 rounded-lg border border-slate-700 space-y-3">
+                                <div className="flex justify-between items-start gap-2">
+                                    <h4 className="font-bold text-lg text-emerald-300">{entity.companyName}</h4>
+                                    <span className="text-sm font-semibold px-2.5 py-1 bg-slate-700 text-slate-200 rounded-md border border-slate-600">{entity.ticker}</span>
+                                </div>
+                                <div>
+                                    <p className="text-xs font-bold text-slate-400 uppercase">Investment Thesis</p>
+                                    <TextWithCitations text={entity.investmentThesis} sources={sources} className="text-sm text-slate-300"/>
+                                </div>
+                            </div>
+                        ))}
+                         {(!analysis.investableEntities || analysis.investableEntities.length === 0) && (
+                            <p className="text-slate-500 text-sm p-4 text-center">No publicly investable entities were identified from the provided research context.</p>
+                        )}
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 
 const KeyQuestionCard: React.FC<{ question: string, sources: GroundingSource[] }> = ({ question, sources }) => {
     return (
@@ -580,6 +673,7 @@ const SourceStats: React.FC<{ sources: GroundingSource[] }> = ({ sources }) => {
     );
 };
 
+type ActiveTab = 'priorities' | 'knowledge_web' | 'action_plan' | 'sources';
 
 interface WorkspaceViewProps {
   workspace: WorkspaceState | null;
@@ -589,8 +683,8 @@ interface WorkspaceViewProps {
   loadingMessage: string;
   onNodeClick: (node: KnowledgeGraphNode) => void;
   selectedNodeId: string | null;
-  activeTab: 'priorities' | 'knowledge_web' | 'sources';
-  setActiveTab: React.Dispatch<React.SetStateAction<'priorities' | 'knowledge_web' | 'sources'>>;
+  activeTab: ActiveTab;
+  setActiveTab: React.Dispatch<React.SetStateAction<ActiveTab>>;
   onManualSourceUpdate: (uri: string, status: SourceStatus) => void;
 }
 
@@ -658,7 +752,7 @@ const WorkspaceView: React.FC<WorkspaceViewProps> = ({ workspace, isLoading, err
         <>
             <AnalysisMeta workspace={workspace} />
 
-            <div className="flex gap-2 sm:gap-4 border-b border-slate-700">
+            <div className="flex flex-wrap gap-2 sm:gap-4 border-b border-slate-700">
                 {(!isTrendAnalysis || workspace.marketInnovationAnalysis) && workspace.knowledgeGraph && (
                     <TabButton
                         label="Priorities"
@@ -673,6 +767,14 @@ const WorkspaceView: React.FC<WorkspaceViewProps> = ({ workspace, isLoading, err
                         icon={isTrendAnalysis ? <ClockIcon className="h-5 w-5" /> : <NetworkIcon className="h-5 w-5" />}
                         isActive={activeTab === 'knowledge_web'}
                         onClick={() => setActiveTab('knowledge_web')}
+                    />
+                )}
+                 {workspace.appliedLongevityAnalysis && (
+                    <TabButton
+                        label="Action Plan"
+                        icon={<ShoppingCartIcon className="h-5 w-5" />}
+                        isActive={activeTab === 'action_plan'}
+                        onClick={() => setActiveTab('action_plan')}
                     />
                 )}
                 <TabButton
@@ -722,6 +824,10 @@ const WorkspaceView: React.FC<WorkspaceViewProps> = ({ workspace, isLoading, err
                       </>
                     )}
                   </div>
+                )}
+                
+                {activeTab === 'action_plan' && workspace.appliedLongevityAnalysis && (
+                    <AppliedLongevityCard analysis={workspace.appliedLongevityAnalysis} sources={workspace.sources} />
                 )}
 
 

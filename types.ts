@@ -17,6 +17,7 @@ export enum AgentType {
     TrendAnalyzer = "TrendAnalyzer",
     SourceFinder = "SourceFinder",
     InnovationAgent = "InnovationAgent",
+    AppliedLongevityAgent = "AppliedLongevityAgent",
 }
 
 export type ContradictionTolerance = 'Low' | 'Medium' | 'High';
@@ -88,6 +89,28 @@ export interface MarketInnovationAnalysis {
     keyCompetitors: string[];
 }
 
+export type EvidenceLevel = 'Human Clinical Trials' | 'Animal Models' | 'In Vitro / In Silico' | 'Correlational / Observational';
+
+export interface ConsumerProduct {
+    name: string;
+    mechanism: string;
+    evidenceLevel: EvidenceLevel;
+    evidenceSummary: string;
+    risks: string;
+}
+
+export interface InvestableEntity {
+    companyName: string;
+    ticker: string;
+    investmentThesis: string;
+}
+
+export interface AppliedLongevityAnalysis {
+    summary: string;
+    consumerProducts: ConsumerProduct[];
+    investableEntities: InvestableEntity[];
+}
+
 export interface Contradiction {
     id: string;
     statement: string;
@@ -129,6 +152,7 @@ export interface WorkspaceState {
   keyQuestion: string | null;
   trendAnalysis: TrendAnalysis | null;
   marketInnovationAnalysis: MarketInnovationAnalysis | null;
+  appliedLongevityAnalysis: AppliedLongevityAnalysis | null;
   timestamp: number;
 }
 
@@ -141,6 +165,7 @@ export interface AgentResponse {
   keyQuestion?: string;
   trendAnalysis?: TrendAnalysis;
   marketInnovationAnalysis?: MarketInnovationAnalysis;
+  appliedLongevityAnalysis?: AppliedLongevityAnalysis;
 }
 
 export interface ChatMessage {

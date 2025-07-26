@@ -196,6 +196,58 @@ ${JSON_IN_MARKDOWN_FORMATTING_INSTRUCTIONS}`;
     return { systemInstruction, userPrompt };
 };
 
+const buildAppliedLongevityAgentPrompts = (
+    query: string,
+    workspaceState: WorkspaceState
+): { systemInstruction: string; userPrompt: string } => {
+    const context = `
+<TOPIC>${workspaceState.topic}</TOPIC>
+<SOURCES>
+${workspaceState.sources.map((s, i) => `<SOURCE ${i+1}>${s.title}: ${s.content}</SOURCE>`).join('\n')}
+</SOURCES>
+<KNOWLEDGE_GRAPH>
+Nodes:
+${workspaceState.knowledgeGraph?.nodes.map(n => `- ${n.label} (${n.type})`).join('\n') || 'No nodes'}
+</KNOWLEDGE_GRAPH>
+<RESEARCH_OPPORTUNITIES>
+${workspaceState.researchOpportunities.map(ro => `- ${ro.title}: ${ro.justification}`).join('\n') || 'No opportunities'}
+</RESEARCH_OPPORTUNITIES>
+    `;
+    const userPrompt = `Based on the provided research context for "${query}", generate an applied longevity analysis.\n\n${context}`;
+
+    const systemInstruction = `You are a pragmatic longevity advisor, bridging the gap between cutting-edge research and actionable steps for health-conscious individuals and investors. You are given a deep scientific analysis of a research area. Your task is to identify:
+1.  **Consumer Products**: Supplements, foods, or compounds mentioned in the research that have some evidence for impacting longevity pathways.
+2.  **Investable Entities**: Publicly traded companies whose work is directly related to the research opportunities identified.
+
+**RESPONSIBILITY & ACCURACY ARE PARAMOUNT:**
+- **DO NOT PROVIDE MEDICAL ADVICE.** Frame all health-related suggestions as informational and for discussion with a qualified healthcare professional. Start your summary with a disclaimer.
+- **BE HONEST ABOUT EVIDENCE.** You MUST classify the evidence for each consumer product into one of four categories. Base this on the provided sources.
+- **CITE EVERYTHING.** All claims in \`evidenceSummary\`, \`risks\`, and \`investmentThesis\` must be backed by citations from the provided sources [1], [2], etc.
+- **Use your latent knowledge** to identify company tickers and specific product names, but **ground the justification for their inclusion** in the provided context and citations.
+
+The JSON object must have the following structure:
+{
+  "appliedLongevityAnalysis": {
+    "summary": "string (High-level summary of the actionable takeaways. Start with 'This information is for educational purposes and is not medical advice. Consult a healthcare professional before making any health decisions.')",
+    "consumerProducts": [{
+      "name": "string (e.g., 'Metformin', 'Fisetin', 'Omega-3 Fatty Acids')",
+      "mechanism": "string (Briefly explain how it is thought to work based on the sources. Add citations.)",
+      "evidenceLevel": "string (MUST be one of: 'Human Clinical Trials', 'Animal Models', 'In Vitro / In Silico', 'Correlational / Observational')",
+      "evidenceSummary": "string (Summarize the evidence from the sources that supports its inclusion. Add citations.)",
+      "risks": "string (Mention known risks or side effects based on the sources, or state that they were not discussed. Add citations.)"
+    }],
+    "investableEntities": [{
+      "companyName": "string (Full name of the publicly traded company.)",
+      "ticker": "string (The stock market ticker symbol, e.g., 'LLY')",
+      "investmentThesis": "string (Why this company is relevant to the research topic. Add citations.)"
+    }]
+  }
+}
+
+${JSON_IN_MARKDOWN_FORMATTING_INSTRUCTIONS}`;
+    return { systemInstruction, userPrompt };
+};
+
 const buildKnowledgeNavigatorPrompts = (
     query: string,
     lens: AnalysisLens,
@@ -340,6 +392,8 @@ export const buildAgentPrompts = (
     switch (agentType) {
         case AgentType.InnovationAgent:
             return buildInnovationAgentPrompts(query, lens, workspaceState);
+        case AgentType.AppliedLongevityAgent:
+             return buildAppliedLongevityAgentPrompts(query, workspaceState);
         case AgentType.TrendAnalyzer:
             return buildTrendAgentPrompts(query, lens, tolerance, workspaceState.sources);
         case AgentType.KnowledgeNavigator:

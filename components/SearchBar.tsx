@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { AgentType, type ModelDefinition, type AnalysisLens, ContradictionTolerance, SearchDataSource, ModelProvider } from '../types';
 import { EXAMPLE_TOPICS, SUPPORTED_MODELS, LENS_DEFINITIONS, DATA_SOURCE_DEFINITIONS } from '../constants';
-import { GearIcon, ChevronDownIcon, NetworkIcon, ClockIcon, LightbulbIcon } from './icons';
+import { GearIcon, ChevronDownIcon, NetworkIcon, ClockIcon, LightbulbIcon, ShoppingCartIcon } from './icons';
 
 interface AgentControlPanelProps {
   topic: string;
@@ -137,20 +137,20 @@ const AgentControlPanel: React.FC<AgentControlPanelProps> = ({
       {/* Action Buttons */}
        <div className="space-y-4 pt-6 border-t border-slate-700/50">
           <h3 className="text-center text-sm font-semibold text-slate-400 uppercase tracking-wider -mt-2 mb-2">Dispatch Agents</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <button
                 onClick={() => onDispatchAgent(selectedLens, AgentType.KnowledgeNavigator, contradictionTolerance)}
                 disabled={isLoading || !topic || (needsGoogleApiKey && !apiKey)}
-                className="flex items-center justify-center gap-3 px-4 py-4 rounded-xl font-bold transition-all duration-300 bg-purple-600 text-white text-lg hover:bg-purple-500 disabled:opacity-50 disabled:cursor-not-allowed border-2 border-purple-500 shadow-lg shadow-purple-500/20"
+                className="lg:col-span-1 flex items-center justify-center gap-3 px-4 py-4 rounded-xl font-bold transition-all duration-300 bg-purple-600 text-white text-lg hover:bg-purple-500 disabled:opacity-50 disabled:cursor-not-allowed border-2 border-purple-500 shadow-lg shadow-purple-500/20"
                 aria-label="Analyze topic and build knowledge graph"
               >
                 <NetworkIcon className="h-6 w-6" />
-                <span>Analyze Current State</span>
+                <span>Analyze State</span>
               </button>
               <button
                 onClick={() => onDispatchAgent(selectedLens, AgentType.TrendAnalyzer, contradictionTolerance)}
                 disabled={isLoading || !topic || (needsGoogleApiKey && !apiKey)}
-                className="flex items-center justify-center gap-3 px-4 py-4 rounded-xl font-bold transition-all duration-300 bg-teal-600 text-white text-lg hover:bg-teal-500 disabled:opacity-50 disabled:cursor-not-allowed border-2 border-teal-500 shadow-lg shadow-teal-500/20"
+                className="lg:col-span-1 flex items-center justify-center gap-3 px-4 py-4 rounded-xl font-bold transition-all duration-300 bg-teal-600 text-white text-lg hover:bg-teal-500 disabled:opacity-50 disabled:cursor-not-allowed border-2 border-teal-500 shadow-lg shadow-teal-500/20"
                 aria-label="Analyze historical trends for the topic"
               >
                 <ClockIcon className="h-6 w-6" />
@@ -159,12 +159,22 @@ const AgentControlPanel: React.FC<AgentControlPanelProps> = ({
               <button
                 onClick={() => onDispatchAgent(selectedLens, AgentType.InnovationAgent, contradictionTolerance)}
                 disabled={isLoading || !isAnalysisComplete}
-                title={!isAnalysisComplete ? "First, run 'Analyze Current State' or 'Analyze Trends' to build a knowledge base." : "Analyze market and innovation potential"}
-                className="flex items-center justify-center gap-3 px-4 py-4 rounded-xl font-bold transition-all duration-300 bg-amber-600 text-white text-lg hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed border-2 border-amber-500 shadow-lg shadow-amber-500/20"
+                title={!isAnalysisComplete ? "First, run 'Analyze State' or 'Analyze Trends' to build a knowledge base." : "Analyze market and innovation potential"}
+                className="lg:col-span-1 flex items-center justify-center gap-3 px-4 py-4 rounded-xl font-bold transition-all duration-300 bg-amber-600 text-white text-lg hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed border-2 border-amber-500 shadow-lg shadow-amber-500/20"
                 aria-label="Analyze market and innovation potential"
               >
                 <LightbulbIcon className="h-6 w-6" />
                 <span>Analyze Innovation</span>
+              </button>
+               <button
+                onClick={() => onDispatchAgent(selectedLens, AgentType.AppliedLongevityAgent, contradictionTolerance)}
+                disabled={isLoading || !isAnalysisComplete}
+                title={!isAnalysisComplete ? "First, run 'Analyze State' or 'Analyze Trends' to build a knowledge base." : "Generate an actionable plan for products and investments"}
+                className="lg:col-span-1 flex items-center justify-center gap-3 px-4 py-4 rounded-xl font-bold transition-all duration-300 bg-green-600 text-white text-lg hover:bg-green-500 disabled:opacity-50 disabled:cursor-not-allowed border-2 border-green-500 shadow-lg shadow-green-500/20"
+                aria-label="Create an action plan with products and investments"
+              >
+                <ShoppingCartIcon className="h-6 w-6" />
+                <span>Create Action Plan</span>
               </button>
           </div>
       </div>

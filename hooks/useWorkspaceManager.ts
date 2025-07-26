@@ -21,11 +21,12 @@ const createWorkspaceState = (
         keyQuestion: agentResponse?.keyQuestion || existingWorkspace?.keyQuestion || null,
         trendAnalysis: agentResponse?.trendAnalysis || existingWorkspace?.trendAnalysis || null,
         marketInnovationAnalysis: agentResponse?.marketInnovationAnalysis || existingWorkspace?.marketInnovationAnalysis || null,
+        appliedLongevityAnalysis: agentResponse?.appliedLongevityAnalysis || existingWorkspace?.appliedLongevityAnalysis || null,
         timestamp: Date.now()
     };
 
-    // If it's an innovation agent, we merge, otherwise we replace
-    if (agentResponse?.marketInnovationAnalysis) {
+    // If it's an additive agent (innovation or applied), we merge, otherwise we replace
+    if (agentResponse?.marketInnovationAnalysis || agentResponse?.appliedLongevityAnalysis) {
         return {
             ...existingWorkspace,
             ...base,
@@ -64,6 +65,7 @@ const sanitizeWorkspaceState = (loadedWorkspace: any): WorkspaceState | null => 
         keyQuestion: loadedWorkspace.keyQuestion || null,
         trendAnalysis: loadedWorkspace.trendAnalysis || null,
         marketInnovationAnalysis: loadedWorkspace.marketInnovationAnalysis || null,
+        appliedLongevityAnalysis: loadedWorkspace.appliedLongevityAnalysis || null,
         timestamp: loadedWorkspace.timestamp || Date.now(),
     };
 };
@@ -120,7 +122,7 @@ export const useWorkspaceManager = ({ settings, apiClient, addLog, storageKey }:
         lens: AnalysisLens, 
         agentType: AgentType,
         tolerance: ContradictionTolerance,
-        setActiveTab: React.Dispatch<React.SetStateAction<'priorities' | 'knowledge_web' | 'sources'>>,
+        setActiveTab: React.Dispatch<React.SetStateAction<'priorities' | 'knowledge_web' | 'action_plan' | 'sources'>>,
         chatHistory: ChatMessage[],
         setChatHistory: React.Dispatch<React.SetStateAction<ChatMessage[]>>, 
         setSelectedNode: React.Dispatch<React.SetStateAction<KnowledgeGraphNode | null>>
@@ -134,14 +136,14 @@ export const useWorkspaceManager = ({ settings, apiClient, addLog, storageKey }:
             return;
         }
 
-        const isInnovationAgent = agentType === AgentType.InnovationAgent;
+        const isAdditiveAgent = agentType === AgentType.InnovationAgent || agentType === AgentType.AppliedLongevityAgent;
 
-        if (isInnovationAgent && (!workspace || !workspace.knowledgeGraph)) {
-            setError("Please run 'Analyze Current State' or 'Analyze Trends' first to build a knowledge base before analyzing for innovation.");
+        if (isAdditiveAgent && (!workspace || !workspace.knowledgeGraph)) {
+            setError("Please run 'Analyze Current State' or 'Analyze Trends' first to build a knowledge base before running this agent.");
             return;
         }
 
-        if (!isInnovationAgent && Object.values(settings.dataSourceLimits).every(limit => limit === 0)) {
+        if (!isAdditiveAgent && Object.values(settings.dataSourceLimits).every(limit => limit === 0)) {
             setError("Please enable at least one data source by setting its result limit greater than 0 in the Advanced Settings.");
             return;
         }
@@ -154,20 +156,20 @@ export const useWorkspaceManager = ({ settings, apiClient, addLog, storageKey }:
         let processedTopic = topic;
         
         // Clear previous analysis if it's a new primary analysis
-        if (!isInnovationAgent) {
+        if (!isAdditiveAgent) {
              setChatHistory([]);
              setSelectedNode(null);
              setActiveTab('sources');
              currentWorkspace = {
                 topic, sources: [], knowledgeGraph: null, synthesis: null, researchOpportunities: [],
-                contradictions: [], synergies: [], keyQuestion: null, trendAnalysis: null, marketInnovationAnalysis: null, timestamp: Date.now()
+                contradictions: [], synergies: [], keyQuestion: null, trendAnalysis: null, marketInnovationAnalysis: null, appliedLongevityAnalysis: null, timestamp: Date.now()
             };
             setWorkspace({ ...currentWorkspace });
         }
         
         try {
             // --- Step 1: Query Pre-processing (if enabled) ---
-            if (settings.preprocessQuery && !isInnovationAgent) {
+            if (settings.preprocessQuery && !isAdditiveAgent) {
                 setLoadingMessage("Enhancing search query...");
                 addLog(`[Query Enhancer] Original query: "${topic}"`);
                 try {
@@ -185,8 +187,9 @@ export const useWorkspaceManager = ({ settings, apiClient, addLog, storageKey }:
 
             let agentResponse: AgentResponse;
 
-            if(isInnovationAgent && currentWorkspace) {
-                setLoadingMessage("Analyzing market & innovation potential...");
+            if(isAdditiveAgent && currentWorkspace) {
+                const loadingMsg = agentType === AgentType.InnovationAgent ? "Analyzing market & innovation potential..." : "Creating Action Plan...";
+                setLoadingMessage(loadingMsg);
                 currentWorkspace.topic = processedTopic; // Ensure workspace has latest topic
                 agentResponse = await apiClient.generateAnalysisFromContext(
                     agentType, settings.model, currentWorkspace, lens, tolerance
@@ -220,17 +223,21 @@ export const useWorkspaceManager = ({ settings, apiClient, addLog, storageKey }:
             const finalWorkspace = createWorkspaceState(processedTopic, currentWorkspace?.sources || [], agentResponse, currentWorkspace);
             setWorkspace(finalWorkspace);
             
-            if (!isInnovationAgent) {
-                setActiveTab(agentType === AgentType.TrendAnalyzer ? 'knowledge_web' : 'priorities');
-            } else {
-                 setActiveTab('priorities'); // Switch to priorities to show the new market analysis
+            if (agentType === AgentType.KnowledgeNavigator) {
+                setActiveTab('priorities');
+            } else if (agentType === AgentType.TrendAnalyzer) {
+                setActiveTab('knowledge_web');
+            } else if (agentType === AgentType.InnovationAgent) {
+                setActiveTab('priorities');
+            } else if (agentType === AgentType.AppliedLongevityAgent) {
+                setActiveTab('action_plan');
             }
             
             const stateToSave = {
                 topic: processedTopic,
                 workspace: finalWorkspace,
                 hasSearched: true,
-                chatHistory: isInnovationAgent ? chatHistory : [], // Preserve chat history for innovation agent
+                chatHistory: isAdditiveAgent ? chatHistory : [], // Preserve chat history for additive agents
                 model: settings.model,
                 contradictionTolerance: tolerance,
                 dataSourceLimits: settings.dataSourceLimits,
