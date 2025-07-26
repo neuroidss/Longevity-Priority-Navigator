@@ -7,6 +7,7 @@ const JSON_IN_MARKDOWN_FORMATTING_INSTRUCTIONS = `
 - Your entire response MUST consist of ONLY a single, valid JSON object enclosed in a markdown code block (\`\`\`json ... \`\`\`).
 - The JSON object must be parseable by a standard JSON parser.
 - Ensure all string values are properly escaped (e.g., use \\" for a double quote character within a string).
+- **CRITICAL**: For any string value that contains newlines (like the 'synthesis' or 'justification' fields), you MUST escape them as \\n. The JSON parser will fail otherwise.
 - Do NOT use trailing commas.
 - Do not include any other text, explanations, or apologies outside the markdown code block.
 `;
@@ -17,6 +18,7 @@ const RAW_JSON_FORMATTING_INSTRUCTIONS = `
 - Do NOT use markdown code blocks or any other formatting.
 - The JSON object must be parseable by a standard JSON parser.
 - Ensure all string values are properly escaped (e.g., use \\" for a double quote character within a string).
+- **CRITICAL**: For any string value that contains newlines, you MUST escape them as \\n.
 - Do NOT use trailing commas.
 - Do not include any other text, explanations, or apologies.
 `;
