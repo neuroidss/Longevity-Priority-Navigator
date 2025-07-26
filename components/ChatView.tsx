@@ -1,4 +1,5 @@
 
+
 import React, { useState, useRef, useCallback } from 'react';
 import { ChatMessage, KnowledgeGraphNode, GroundingSource } from '../types';
 import { LightbulbIcon, NetworkIcon } from './icons';
@@ -131,9 +132,6 @@ const ChatView: React.FC<ChatViewProps> = ({
     chatHistory, isChatting, onSendMessage, isWorkspaceReady, selectedNode, onClearSelectedNode, sources
 }) => {
     const endOfMessagesRef = useRef<HTMLDivElement>(null);
-
-    // NOTE: The auto-scrolling useEffect was removed as per user request to stop all forced scrolling/focus changes.
-    // The user can now manually scroll the chat panel.
 
     return (
         <div className="flex flex-col h-[85vh] bg-slate-900/50 rounded-lg border border-slate-700">

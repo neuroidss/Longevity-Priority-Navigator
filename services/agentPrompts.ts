@@ -1,4 +1,5 @@
 
+
 import { AgentType, type WorkspaceState, type AnalysisLens, type GroundingSource, type SearchResult, ContradictionTolerance } from '../types';
 import { LENS_DEFINITIONS } from "../constants";
 
@@ -250,6 +251,65 @@ ${JSON_IN_MARKDOWN_FORMATTING_INSTRUCTIONS}`;
     return { systemInstruction, userPrompt };
 };
 
+const buildGenerativeMoleculeAgentPrompts = (
+    query: string,
+    workspaceState: WorkspaceState
+): { systemInstruction: string; userPrompt: string } => {
+    const seedMolecules = workspaceState.appliedLongevityAnalysis?.consumerProducts
+        .map(p => `- ${p.name} (Mechanism: ${p.mechanism})`)
+        .join('\n') || 'No seed molecules available.';
+    
+    const context = `
+<TOPIC>${workspaceState.topic}</TOPIC>
+<SEED_COMPOUNDS>
+${seedMolecules}
+</SEED_COMPOUNDS>
+<RESEARCH_CONTEXT>
+${workspaceState.synthesis || 'No synthesis available.'}
+</RESEARCH_CONTEXT>
+    `;
+
+    const userPrompt = `Based on the provided research context and seed compounds for "${query}", generate a novel molecule.\n\n${context}`;
+
+    const systemInstruction = `You are an expert computational chemist AI, specializing in generative models for drug discovery. Your task is to propose a novel, hypothetical small molecule based on a given set of 'seed' compounds and research context.
+
+**Your process:**
+1.  **Analyze Seeds**: Analyze the provided seed compounds and their mechanisms.
+2.  **Generate Novel Molecule**: Generate a novel molecule that is structurally related to the seeds but is not identical. Provide its structure in SMILES format and a plausible IUPAC name.
+3.  **Predict Properties**: Predict key drug-like properties for your new molecule (Lipinski's rule of five).
+4.  **Create Abstract**: Write a short, hypothetical paper abstract announcing the discovery of this molecule, its potential mechanism of action, and its relevance to the research topic.
+
+**CRITICAL INSTRUCTIONS:**
+- The generated SMILES string MUST be syntactically valid.
+- The IUPAC name should be plausible for the given SMILES structure.
+- The predictions for properties should be reasonable estimations.
+- The abstract should be creative, scientific, and grounded in the provided research context.
+- Your entire response MUST be a single, valid JSON object.
+
+The JSON object must have the following structure:
+{
+  "generativeMoleculeAnalysis": {
+    "summary": "string (A brief summary of your generative process and the rationale for the new molecule.)",
+    "predictedMolecule": {
+      "smiles": "string (The novel molecule in SMILES format. e.g., 'CC(=O)Oc1ccccc1C(=O)O')",
+      "iupacName": "string (The predicted IUPAC name for the molecule.)",
+      "predictedProperties": {
+        "molecularWeight": "number",
+        "logP": "number (Octanol-water partition coefficient)",
+        "tpsa": "number (Topological Polar Surface Area)",
+        "lipinskiViolations": "number (Count of violations of Lipinski's Rule of Five)"
+      },
+      "paperAbstract": "string (A hypothetical scientific abstract for a paper discovering this molecule.)"
+    }
+  }
+}
+
+${JSON_IN_MARKDOWN_FORMATTING_INSTRUCTIONS}`;
+
+    return { systemInstruction, userPrompt };
+};
+
+
 const buildKnowledgeNavigatorPrompts = (
     query: string,
     lens: AnalysisLens,
@@ -396,6 +456,8 @@ export const buildAgentPrompts = (
             return buildInnovationAgentPrompts(query, lens, workspaceState);
         case AgentType.AppliedLongevityAgent:
              return buildAppliedLongevityAgentPrompts(query, workspaceState);
+        case AgentType.GenerativeMoleculeAgent:
+            return buildGenerativeMoleculeAgentPrompts(query, workspaceState);
         case AgentType.TrendAnalyzer:
             return buildTrendAgentPrompts(query, lens, tolerance, workspaceState.sources);
         case AgentType.KnowledgeNavigator:

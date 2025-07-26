@@ -18,6 +18,7 @@ export enum AgentType {
     SourceFinder = "SourceFinder",
     InnovationAgent = "InnovationAgent",
     AppliedLongevityAgent = "AppliedLongevityAgent",
+    GenerativeMoleculeAgent = "GenerativeMoleculeAgent",
 }
 
 export type ContradictionTolerance = 'Low' | 'Medium' | 'High';
@@ -111,6 +112,25 @@ export interface AppliedLongevityAnalysis {
     investableEntities: InvestableEntity[];
 }
 
+export interface PredictedProperties {
+    molecularWeight: number;
+    logP: number;
+    tpsa: number;
+    lipinskiViolations: number;
+}
+
+export interface PredictedMolecule {
+    smiles: string;
+    iupacName: string;
+    predictedProperties: PredictedProperties;
+    paperAbstract: string;
+}
+
+export interface GenerativeMoleculeAnalysis {
+    summary: string;
+    predictedMolecule: PredictedMolecule;
+}
+
 export interface Contradiction {
     id: string;
     statement: string;
@@ -153,6 +173,7 @@ export interface WorkspaceState {
   trendAnalysis: TrendAnalysis | null;
   marketInnovationAnalysis: MarketInnovationAnalysis | null;
   appliedLongevityAnalysis: AppliedLongevityAnalysis | null;
+  generativeMoleculeAnalysis: GenerativeMoleculeAnalysis | null;
   timestamp: number;
 }
 
@@ -166,6 +187,7 @@ export interface AgentResponse {
   trendAnalysis?: TrendAnalysis;
   marketInnovationAnalysis?: MarketInnovationAnalysis;
   appliedLongevityAnalysis?: AppliedLongevityAnalysis;
+  generativeMoleculeAnalysis?: GenerativeMoleculeAnalysis;
 }
 
 export interface ChatMessage {

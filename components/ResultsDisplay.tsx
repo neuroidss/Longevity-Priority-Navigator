@@ -1,6 +1,7 @@
 
+
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { type WorkspaceState, type KnowledgeGraphNode, type ResearchOpportunity, type AnalysisLens, type TrendAnalysis, Contradiction, Synergy, GroundingSource, SourceStatus, SearchDataSource, MarketInnovationAnalysis, AppliedLongevityAnalysis, EvidenceLevel, ConsumerProduct, InvestableEntity } from '../types';
+import { type WorkspaceState, type KnowledgeGraphNode, type ResearchOpportunity, type AnalysisLens, type TrendAnalysis, Contradiction, Synergy, GroundingSource, SourceStatus, SearchDataSource, MarketInnovationAnalysis, AppliedLongevityAnalysis, EvidenceLevel, ConsumerProduct, InvestableEntity, GenerativeMoleculeAnalysis, AgentType, ContradictionTolerance } from '../types';
 import LoadingSpinner from './LoadingSpinner';
 import { LinkIcon, NetworkIcon, LightbulbIcon, HypothesisIcon, BrainIcon, ClockIcon, ArrowTrendingUpIcon, ArrowTrendingDownIcon, BeakerIcon, ArrowsRightLeftIcon, BuildingLibraryIcon, ShieldCheckIcon, MethodIcon, SynergyIcon, ConflictIcon, CheckCircleIcon, XCircleIcon, QuestionMarkCircleIcon, ExclamationTriangleIcon, GoogleIcon, ArticleIcon, PatentIcon, GeneIcon, UsersIcon, RocketLaunchIcon, ScaleIcon, BuildingStorefrontIcon, ShoppingCartIcon, ChartBarIcon } from './icons';
 import KnowledgeGraphView from './KnowledgeGraphView';
@@ -318,8 +319,73 @@ const EvidenceLevelTag: React.FC<{ level: EvidenceLevel }> = ({ level }) => {
     );
 };
 
+const GenerativeMoleculeCard: React.FC<{ analysis: GenerativeMoleculeAnalysis }> = ({ analysis }) => {
+    const { predictedMolecule } = analysis;
+    const imageUrl = `https://cactus.nci.nih.gov/chemical/structure/${encodeURIComponent(predictedMolecule.smiles)}/image?width=250&height=250`;
+    
+    return (
+        <div className="bg-slate-800/50 p-6 rounded-2xl border border-fuchsia-700/50 mt-8">
+             <div className="flex flex-col md:flex-row items-center gap-6">
+                <div className="flex-shrink-0 text-center">
+                    <div className="flex items-center gap-2 mb-2 justify-center">
+                        <BeakerIcon className="h-6 w-6 text-fuchsia-400" />
+                        <h3 className="text-xl font-bold text-fuchsia-300">Generated Molecule</h3>
+                    </div>
+                    <div className="w-48 h-48 bg-slate-200 rounded-lg flex items-center justify-center p-2 border-2 border-slate-400">
+                        <img src={imageUrl} alt={`Structure of ${predictedMolecule.iupacName}`} className="max-w-full max-h-full"/>
+                    </div>
+                </div>
+                <div className="flex-1 space-y-4">
+                    <div>
+                        <p className="text-xs font-bold text-slate-400 uppercase">SMILES String</p>
+                        <p className="font-mono text-sm text-slate-300 bg-slate-900 p-2 rounded break-all">{predictedMolecule.smiles}</p>
+                    </div>
+                     <div>
+                        <p className="text-xs font-bold text-slate-400 uppercase">Predicted IUPAC Name</p>
+                        <p className="font-semibold text-slate-200">{predictedMolecule.iupacName}</p>
+                    </div>
+                </div>
+             </div>
 
-const AppliedLongevityCard: React.FC<{ analysis: AppliedLongevityAnalysis, sources: GroundingSource[] }> = ({ analysis, sources }) => {
+             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6 text-center">
+                <div className="bg-slate-700/50 p-3 rounded-lg">
+                    <p className="text-xs text-slate-400">Mol. Weight</p>
+                    <p className="font-bold text-lg text-slate-100">{predictedMolecule.predictedProperties.molecularWeight.toFixed(2)}</p>
+                </div>
+                 <div className="bg-slate-700/50 p-3 rounded-lg">
+                    <p className="text-xs text-slate-400">LogP</p>
+                    <p className="font-bold text-lg text-slate-100">{predictedMolecule.predictedProperties.logP.toFixed(2)}</p>
+                </div>
+                 <div className="bg-slate-700/50 p-3 rounded-lg">
+                    <p className="text-xs text-slate-400">TPSA</p>
+                    <p className="font-bold text-lg text-slate-100">{predictedMolecule.predictedProperties.tpsa.toFixed(2)}</p>
+                </div>
+                 <div className="bg-slate-700/50 p-3 rounded-lg">
+                    <p className="text-xs text-slate-400">Lipinski Viol.</p>
+                    <p className="font-bold text-lg text-slate-100">{predictedMolecule.predictedProperties.lipinskiViolations}</p>
+                </div>
+             </div>
+             
+             <div className="mt-6 pt-6 border-t border-slate-700 space-y-2">
+                 <h4 className="text-lg font-bold text-slate-200">Hypothetical Paper Abstract</h4>
+                 <p className="text-sm text-slate-300 italic">"{predictedMolecule.paperAbstract}"</p>
+             </div>
+             <div className="mt-4 pt-4 border-t border-slate-700 space-y-2">
+                 <h4 className="text-lg font-bold text-slate-200">AI Summary</h4>
+                 <p className="text-sm text-slate-300">{analysis.summary}</p>
+             </div>
+        </div>
+    );
+};
+
+
+const AppliedLongevityCard: React.FC<{ 
+    analysis: AppliedLongevityAnalysis, 
+    sources: GroundingSource[],
+    generativeAnalysis: GenerativeMoleculeAnalysis | null,
+    onDispatchAgent: (lens: AnalysisLens, agentType: AgentType, tolerance: ContradictionTolerance) => void,
+    isLoading: boolean,
+}> = ({ analysis, sources, generativeAnalysis, onDispatchAgent, isLoading }) => {
     return (
         <div className="bg-gradient-to-br from-slate-900 to-slate-800 border border-slate-700 rounded-2xl p-6 shadow-2xl shadow-slate-800/20 space-y-8">
             {/* Header */}
@@ -390,6 +456,21 @@ const AppliedLongevityCard: React.FC<{ analysis: AppliedLongevityAnalysis, sourc
                     </div>
                 </div>
             </div>
+
+            <div className="pt-8 border-t border-slate-700/50 text-center">
+                 <h3 className="text-lg font-bold text-slate-200 mb-2">Next Step: Generative Discovery</h3>
+                 <p className="text-sm text-slate-400 mb-4 max-w-xl mx-auto">Use the compounds identified above as seeds for the AI to predict a novel, structurally-related molecule.</p>
+                 <button
+                    onClick={() => onDispatchAgent('Balanced', AgentType.GenerativeMoleculeAgent, 'Medium')}
+                    disabled={isLoading || !analysis.consumerProducts || analysis.consumerProducts.length === 0}
+                    className="inline-flex items-center justify-center gap-3 px-6 py-3 rounded-xl font-bold transition-all duration-300 bg-fuchsia-600 text-white text-lg hover:bg-fuchsia-500 disabled:opacity-50 disabled:cursor-not-allowed border-2 border-fuchsia-500 shadow-lg shadow-fuchsia-500/20"
+                 >
+                    <BeakerIcon className="h-6 w-6" />
+                    <span>Discover Novel Molecule</span>
+                 </button>
+            </div>
+            
+            {generativeAnalysis && <GenerativeMoleculeCard analysis={generativeAnalysis} />}
         </div>
     );
 };
@@ -686,9 +767,10 @@ interface WorkspaceViewProps {
   activeTab: ActiveTab;
   setActiveTab: React.Dispatch<React.SetStateAction<ActiveTab>>;
   onManualSourceUpdate: (uri: string, status: SourceStatus) => void;
+  onDispatchAgent: (lens: AnalysisLens, agentType: AgentType, tolerance: ContradictionTolerance) => void;
 }
 
-const WorkspaceView: React.FC<WorkspaceViewProps> = ({ workspace, isLoading, error, hasSearched, loadingMessage, onNodeClick, selectedNodeId, activeTab, setActiveTab, onManualSourceUpdate }) => {
+const WorkspaceView: React.FC<WorkspaceViewProps> = ({ workspace, isLoading, error, hasSearched, loadingMessage, onNodeClick, selectedNodeId, activeTab, setActiveTab, onManualSourceUpdate, onDispatchAgent }) => {
   const [highlightedNodeIds, setHighlightedNodeIds] = useState<string[] | null>(null);
 
   const isTrendAnalysis = !!workspace?.trendAnalysis;
@@ -827,7 +909,13 @@ const WorkspaceView: React.FC<WorkspaceViewProps> = ({ workspace, isLoading, err
                 )}
                 
                 {activeTab === 'action_plan' && workspace.appliedLongevityAnalysis && (
-                    <AppliedLongevityCard analysis={workspace.appliedLongevityAnalysis} sources={workspace.sources} />
+                    <AppliedLongevityCard 
+                        analysis={workspace.appliedLongevityAnalysis} 
+                        sources={workspace.sources} 
+                        generativeAnalysis={workspace.generativeMoleculeAnalysis}
+                        onDispatchAgent={onDispatchAgent}
+                        isLoading={isLoading}
+                    />
                 )}
 
 

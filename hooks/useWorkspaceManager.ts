@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { type WorkspaceState, AgentType, type ChatMessage, type AgentResponse, type KnowledgeGraph, type KnowledgeGraphNode, type AnalysisLens, GroundingSource, SourceStatus, ContradictionTolerance, ModelProvider, MarketInnovationAnalysis } from '../types';
 import { ApiClient } from '../services/geminiService';
@@ -22,11 +23,12 @@ const createWorkspaceState = (
         trendAnalysis: agentResponse?.trendAnalysis || existingWorkspace?.trendAnalysis || null,
         marketInnovationAnalysis: agentResponse?.marketInnovationAnalysis || existingWorkspace?.marketInnovationAnalysis || null,
         appliedLongevityAnalysis: agentResponse?.appliedLongevityAnalysis || existingWorkspace?.appliedLongevityAnalysis || null,
+        generativeMoleculeAnalysis: agentResponse?.generativeMoleculeAnalysis || existingWorkspace?.generativeMoleculeAnalysis || null,
         timestamp: Date.now()
     };
 
     // If it's an additive agent (innovation or applied), we merge, otherwise we replace
-    if (agentResponse?.marketInnovationAnalysis || agentResponse?.appliedLongevityAnalysis) {
+    if (agentResponse?.marketInnovationAnalysis || agentResponse?.appliedLongevityAnalysis || agentResponse?.generativeMoleculeAnalysis) {
         return {
             ...existingWorkspace,
             ...base,
@@ -66,6 +68,7 @@ const sanitizeWorkspaceState = (loadedWorkspace: any): WorkspaceState | null => 
         trendAnalysis: loadedWorkspace.trendAnalysis || null,
         marketInnovationAnalysis: loadedWorkspace.marketInnovationAnalysis || null,
         appliedLongevityAnalysis: loadedWorkspace.appliedLongevityAnalysis || null,
+        generativeMoleculeAnalysis: loadedWorkspace.generativeMoleculeAnalysis || null,
         timestamp: loadedWorkspace.timestamp || Date.now(),
     };
 };
@@ -136,10 +139,15 @@ export const useWorkspaceManager = ({ settings, apiClient, addLog, storageKey }:
             return;
         }
 
-        const isAdditiveAgent = agentType === AgentType.InnovationAgent || agentType === AgentType.AppliedLongevityAgent;
+        const isAdditiveAgent = agentType === AgentType.InnovationAgent || agentType === AgentType.AppliedLongevityAgent || agentType === AgentType.GenerativeMoleculeAgent;
 
         if (isAdditiveAgent && (!workspace || !workspace.knowledgeGraph)) {
             setError("Please run 'Analyze Current State' or 'Analyze Trends' first to build a knowledge base before running this agent.");
+            return;
+        }
+        
+        if (agentType === AgentType.GenerativeMoleculeAgent && (!workspace?.appliedLongevityAnalysis?.consumerProducts || workspace.appliedLongevityAnalysis.consumerProducts.length === 0)) {
+            setError("Please run 'Create Action Plan' first to identify seed compounds for molecule generation.");
             return;
         }
 
@@ -162,7 +170,7 @@ export const useWorkspaceManager = ({ settings, apiClient, addLog, storageKey }:
              setActiveTab('sources');
              currentWorkspace = {
                 topic, sources: [], knowledgeGraph: null, synthesis: null, researchOpportunities: [],
-                contradictions: [], synergies: [], keyQuestion: null, trendAnalysis: null, marketInnovationAnalysis: null, appliedLongevityAnalysis: null, timestamp: Date.now()
+                contradictions: [], synergies: [], keyQuestion: null, trendAnalysis: null, marketInnovationAnalysis: null, appliedLongevityAnalysis: null, generativeMoleculeAnalysis: null, timestamp: Date.now()
             };
             setWorkspace({ ...currentWorkspace });
         }
@@ -186,10 +194,17 @@ export const useWorkspaceManager = ({ settings, apiClient, addLog, storageKey }:
             }
 
             let agentResponse: AgentResponse;
+            const getLoadingMessage = (agent: AgentType): string => {
+                 switch(agent) {
+                    case AgentType.InnovationAgent: return "Analyzing market & innovation potential...";
+                    case AgentType.AppliedLongevityAgent: return "Creating Action Plan...";
+                    case AgentType.GenerativeMoleculeAgent: return "Simulating novel molecule discovery...";
+                    default: return "Synthesizing analysis from primary sources...";
+                }
+            }
 
             if(isAdditiveAgent && currentWorkspace) {
-                const loadingMsg = agentType === AgentType.InnovationAgent ? "Analyzing market & innovation potential..." : "Creating Action Plan...";
-                setLoadingMessage(loadingMsg);
+                setLoadingMessage(getLoadingMessage(agentType));
                 currentWorkspace.topic = processedTopic; // Ensure workspace has latest topic
                 agentResponse = await apiClient.generateAnalysisFromContext(
                     agentType, settings.model, currentWorkspace, lens, tolerance
@@ -213,7 +228,7 @@ export const useWorkspaceManager = ({ settings, apiClient, addLog, storageKey }:
                     throw new Error("The AI agent could not find and validate any sources for the topic.");
                 }
 
-                setLoadingMessage("Synthesizing analysis from primary sources...");
+                setLoadingMessage(getLoadingMessage(agentType));
                 agentResponse = await apiClient.generateAnalysisFromContext(
                     agentType, settings.model, { ...currentWorkspace!, sources: validatedSources }, lens, tolerance
                 );
@@ -223,13 +238,11 @@ export const useWorkspaceManager = ({ settings, apiClient, addLog, storageKey }:
             const finalWorkspace = createWorkspaceState(processedTopic, currentWorkspace?.sources || [], agentResponse, currentWorkspace);
             setWorkspace(finalWorkspace);
             
-            if (agentType === AgentType.KnowledgeNavigator) {
+            if (agentType === AgentType.KnowledgeNavigator || agentType === AgentType.InnovationAgent) {
                 setActiveTab('priorities');
             } else if (agentType === AgentType.TrendAnalyzer) {
                 setActiveTab('knowledge_web');
-            } else if (agentType === AgentType.InnovationAgent) {
-                setActiveTab('priorities');
-            } else if (agentType === AgentType.AppliedLongevityAgent) {
+            } else if (agentType === AgentType.AppliedLongevityAgent || agentType === AgentType.GenerativeMoleculeAgent) {
                 setActiveTab('action_plan');
             }
             

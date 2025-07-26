@@ -1,4 +1,5 @@
 
+
 import { GoogleGenAI } from "@google/genai";
 import { 
     type AgentResponse, type GroundingSource, 
@@ -68,6 +69,7 @@ const parseAgentResponse = (jsonText: string, agentType: AgentType, addLog: (msg
         if (data.trendAnalysis) response.trendAnalysis = data.trendAnalysis;
         if (data.marketInnovationAnalysis) response.marketInnovationAnalysis = data.marketInnovationAnalysis;
         if (data.appliedLongevityAnalysis) response.appliedLongevityAnalysis = data.appliedLongevityAnalysis;
+        if (data.generativeMoleculeAnalysis) response.generativeMoleculeAnalysis = data.generativeMoleculeAnalysis;
         if (data.contradictions) {
             response.contradictions = data.contradictions.map((c: any, index: number) => ({ id: `con-${index}-${Math.random()}`, statement: c.statement }));
         }

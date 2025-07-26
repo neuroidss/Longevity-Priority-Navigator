@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { AgentType, type AnalysisLens, type ChatMessage, type KnowledgeGraphNode, type GroundingSource, type WorkspaceState, SourceStatus, ContradictionTolerance, ModelProvider, SearchDataSource } from './types';
 import { ApiClient } from './services/geminiService';
@@ -17,80 +18,6 @@ import Footer from './components/Footer';
 const APP_STATE_STORAGE_KEY = 'longevityKnowledgeGraphState';
 
 type ActiveTab = 'priorities' | 'knowledge_web' | 'action_plan' | 'sources';
-
-interface DashboardProps {
-    activeTab: ActiveTab;
-    setActiveTab: React.Dispatch<React.SetStateAction<ActiveTab>>;
-    workspace: WorkspaceState | null;
-    isLoading: boolean;
-    error: string | null;
-    hasSearched: boolean;
-    loadingMessage: string;
-    onNodeClick: (node: KnowledgeGraphNode) => void;
-    selectedNode: KnowledgeGraphNode | null;
-    onClearSelectedNode: () => void;
-    chatHistory: ChatMessage[];
-    isChatting: boolean;
-    onSendMessage: (message: string) => void;
-    onManualSourceUpdate: (uri: string, status: SourceStatus) => void;
-}
-
-const Dashboard: React.FC<DashboardProps> = ({
-    activeTab,
-    setActiveTab,
-    workspace,
-    isLoading,
-    error,
-    hasSearched,
-    loadingMessage,
-    onNodeClick,
-    selectedNode,
-    onClearSelectedNode,
-    chatHistory,
-    isChatting,
-    onSendMessage,
-    onManualSourceUpdate,
-}) => {
-    const isGraphFocused = activeTab === 'knowledge_web';
-    const isActionPlanFocused = activeTab === 'action_plan';
-    const isWorkspaceReady = !!workspace && (!!workspace.knowledgeGraph || !!workspace.appliedLongevityAnalysis);
-    const sources = workspace?.sources || [];
-    
-    const mainContentSpan = isGraphFocused ? 'lg:col-span-2' : 'lg:col-span-1';
-
-    return (
-        <div className={`grid grid-cols-1 ${isActionPlanFocused ? 'lg:grid-cols-1' : 'lg:grid-cols-3'} gap-8 mt-8 items-start`}>
-            <div className={`${isActionPlanFocused ? 'lg:col-span-1' : 'lg:col-span-2'} flex flex-col gap-8`}>
-                <WorkspaceView
-                    workspace={workspace}
-                    isLoading={isLoading}
-                    error={error}
-                    hasSearched={hasSearched}
-                    loadingMessage={loadingMessage}
-                    onNodeClick={onNodeClick}
-                    selectedNodeId={selectedNode?.id || null}
-                    activeTab={activeTab}
-                    setActiveTab={setActiveTab}
-                    onManualSourceUpdate={onManualSourceUpdate}
-                />
-            </div>
-             {!isActionPlanFocused && (
-                <div className="lg:col-span-1 lg:sticky lg:top-8">
-                     <ChatView
-                        chatHistory={chatHistory}
-                        isChatting={isChatting}
-                        onSendMessage={onSendMessage}
-                        isWorkspaceReady={isWorkspaceReady}
-                        selectedNode={selectedNode}
-                        onClearSelectedNode={onClearSelectedNode}
-                        sources={sources}
-                    />
-                </div>
-            )}
-        </div>
-    );
-};
-
 
 const App: React.FC = () => {
     // --- State Management using Hooks ---
@@ -232,22 +159,35 @@ const App: React.FC = () => {
                     preprocessQuery={preprocessQuery}
                     onPreprocessQueryChange={setPreprocessQuery}
                 />
-                <Dashboard
-                    activeTab={activeTab}
-                    setActiveTab={setActiveTab}
-                    workspace={workspace}
-                    isLoading={isLoading}
-                    error={error}
-                    hasSearched={hasSearched}
-                    loadingMessage={loadingMessage}
-                    onNodeClick={(node) => setSelectedNode(node)}
-                    selectedNode={selectedNode}
-                    onClearSelectedNode={() => setSelectedNode(null)}
-                    chatHistory={chatHistory}
-                    isChatting={isChatting}
-                    onSendMessage={handleSendMessage}
-                    onManualSourceUpdate={handleManualSourceUpdate}
-                />
+                 <div className="flex flex-col gap-8 mt-8 items-start">
+                    <div className="w-full">
+                        <WorkspaceView
+                            workspace={workspace}
+                            isLoading={isLoading}
+                            error={error}
+                            hasSearched={hasSearched}
+                            loadingMessage={loadingMessage}
+                            onNodeClick={(node) => setSelectedNode(node)}
+                            selectedNodeId={selectedNode?.id || null}
+                            activeTab={activeTab}
+                            setActiveTab={setActiveTab}
+                            onManualSourceUpdate={handleManualSourceUpdate}
+                            onDispatchAgent={handleDispatchWrapper}
+                        />
+                    </div>
+                    
+                    <div className="w-full">
+                         <ChatView
+                            chatHistory={chatHistory}
+                            isChatting={isChatting}
+                            onSendMessage={handleSendMessage}
+                            isWorkspaceReady={!!workspace && (!!workspace.knowledgeGraph || !!workspace.appliedLongevityAnalysis)}
+                            selectedNode={selectedNode}
+                            onClearSelectedNode={() => setSelectedNode(null)}
+                            sources={workspace?.sources || []}
+                        />
+                    </div>
+                </div>
                 <Footer />
             </div>
             <DebugLogView 
